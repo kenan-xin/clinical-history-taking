@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 MODEL = os.getenv("MODEL", "gemini-3.1-flash-live-preview")
-VOICE_NAME = os.getenv("VOICE_NAME", "Puck")
+VOICE_NAME = os.getenv("VOICE_NAME", "Aoede")
 
 # Simple in-memory session resume data.
 # This is process-local and single-user only — concurrent users will overwrite each other.
@@ -82,16 +82,25 @@ send_message_to_intake_agent_declaration = types.Tool(
 # closing message). Checked against the tool answer; when matched, the result
 # carries intake_complete=True so the frontend can end the session on its own.
 # NOTE: heuristic until the intake agent exposes an explicit completion flag —
-# its SSE events carry no phase/queue fields (verified 2026-09-25).
+# its SSE events carry no phase/queue fields (verified 2026-09-25). The closing
+# wording varies per run; markers below cover every variant observed so far.
 INTAKE_COMPLETE_PHRASES = (
-    "review everything",
+    "recorded everything",
+    "recorded all",
+    "captured all",
+    "captured everything",
     "compile a summary",
     "compiling a summary",
+    "review everything",
+    "review your summary",
+    "summary for the doctor",
     "will be with you soon",
     "will be with them soon",
-    "review it shortly",
-    "review and discuss",
 )
+
+# generic closing shape: staff + timing + a record/completion word
+INTAKE_STAFF_WORDS = ("doctor", "nurse", "staff", "care team", "medical team", "clinician")
+INTAKE_RECORD_WORDS = ("recorded", "captured", "compile", "summary")
 
 
 def _looks_intake_complete(answer: str) -> bool:
@@ -100,11 +109,10 @@ def _looks_intake_complete(answer: str) -> bool:
     lowered = answer.lower()
     if any(phrase in lowered for phrase in INTAKE_COMPLETE_PHRASES):
         return True
-    # generic closing shape: doctor/nurse + review/see-you + shortly/soon
-    has_staff = "doctor" in lowered or "nurse" in lowered
-    has_action = "review" in lowered or "see you" in lowered
+    has_staff = any(word in lowered for word in INTAKE_STAFF_WORDS)
     has_timing = "shortly" in lowered or "soon" in lowered
-    return has_staff and has_action and has_timing
+    has_record = any(word in lowered for word in INTAKE_RECORD_WORDS)
+    return has_staff and has_timing and has_record
 
 
 def make_intake_agent_handler(intake_session: dict):

@@ -96,8 +96,8 @@ export function ChatScreen({ session }: { session: Session }) {
 
       {/* footer stack on phones / split panes from tablet */}
       <div className="flex flex-col gap-3 px-4 py-3 bg-surface border-t border-line md:contents">
-        {/* session panel */}
-        <div className="md:flex md:flex-col md:gap-4 md:p-5 md:bg-surface md:border-r md:border-line md:overflow-y-auto md:col-start-1 md:row-start-2 md:[grid-row:2/-1] lg:col-start-2 lg:row-start-2 lg:[grid-row:2/3] lg:border-r-0 lg:border-l">
+        {/* session panel: left info column beside the transcript (md), right inspector (lg) */}
+        <div className="md:flex md:flex-col md:gap-4 md:p-5 md:bg-surface md:border-r md:border-line md:overflow-y-auto md:col-start-1 md:row-start-2 md:[grid-row:2/3] lg:col-start-2 lg:row-start-2 lg:[grid-row:2/3] lg:border-r-0 lg:border-l">
           {/* state line */}
           <p
             aria-live="polite"
@@ -160,8 +160,8 @@ export function ChatScreen({ session }: { session: Session }) {
           </div>
         </div>
 
-        {/* controls */}
-        <div className="order-4 flex justify-center items-start gap-6 md:order-none md:col-start-2 md:row-start-3 md:justify-self-center md:items-center md:gap-2 md:my-2 md:mb-4 md:p-2 md:bg-surface md:border md:border-line md:rounded-full md:shadow-float lg:col-start-2 lg:row-start-3 lg:justify-self-stretch lg:justify-around lg:my-0 lg:px-4 lg:py-2 lg:border-0 lg:border-t lg:border-l lg:border-line lg:rounded-none lg:shadow-none">
+        {/* controls: centered across the full screen from md up (like mobile), right rail on lg */}
+        <div className="order-4 flex justify-center items-start gap-6 md:order-none md:col-span-2 md:col-start-1 md:row-start-3 md:justify-self-center md:items-center md:gap-2 md:my-2 md:mb-4 md:p-2 md:bg-surface md:border md:border-line md:rounded-full md:shadow-float lg:col-span-1 lg:col-start-2 lg:row-start-3 lg:justify-self-stretch lg:justify-around lg:my-0 lg:px-4 lg:py-2 lg:border-0 lg:border-t lg:border-l lg:border-line lg:rounded-none lg:shadow-none">
           <ControlButton
             icon={<Video className="size-6 lg:size-5" strokeWidth={1.75} />}
             label={video === "camera" ? t("cam_on") : t("cam")}
@@ -206,7 +206,7 @@ export function ChatScreen({ session }: { session: Session }) {
           id="composer"
           onSubmit={submit}
           className={cn(
-            "order-3 flex items-center gap-2 md:order-none md:col-start-2 md:row-start-4 md:p-3 md:px-6 md:pb-4 md:bg-surface md:border-t md:border-line lg:col-start-1 lg:row-start-3 lg:flex-wrap lg:py-3 lg:px-[max(24px,calc((100%-760px)/2))]",
+            "order-3 flex items-center gap-2 md:order-none md:col-span-2 md:col-start-1 md:row-start-4 md:p-3 md:px-6 md:pb-4 md:bg-surface md:border-t md:border-line lg:col-span-1 lg:col-start-1 lg:row-start-3 lg:flex-wrap lg:py-3 lg:px-[max(24px,calc((100%-760px)/2))]",
             !composerOpen && "hidden lg:flex",
           )}
         >

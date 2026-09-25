@@ -39,6 +39,30 @@ function queueNumberFromVisit(visitId: string): string {
   return String(1000 + (h % 9000));
 }
 
+/**
+ * A completed interview leaves the visit's clinical record in its compile
+ * phase, so a later fresh start on the same visit must send `Restart Session:`
+ * (which clears the record) instead of `Start Session:` (which would just
+ * re-announce the summary). Persisted per visit so it survives reloads.
+ */
+const completedKey = (visitId: string) => `intake-completed:${visitId}`;
+
+function hasCompletedBefore(visitId: string) {
+  try {
+    return window.localStorage.getItem(completedKey(visitId)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markCompleted(visitId: string) {
+  try {
+    window.localStorage.setItem(completedKey(visitId), "1");
+  } catch {
+    // storage unavailable (private mode): auto-restart just won't apply
+  }
+}
+
 let nextId = 1;
 
 interface Options {
@@ -53,7 +77,7 @@ export function useClinicalSession({ visitIdFromUrl, voiceFromUrl, t }: Options)
   const [voice, setVoice] = useState(
     voiceFromUrl && VOICES.includes(voiceFromUrl as (typeof VOICES)[number])
       ? voiceFromUrl
-      : "Puck",
+      : "Aoede", // softer female voice by default
   );
   const [restart, setRestart] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -113,7 +137,11 @@ export function useClinicalSession({ visitIdFromUrl, voiceFromUrl, t }: Options)
           window.matchMedia("(min-width: 64rem) and (pointer: fine)").matches,
         );
         if (!ref.current.resuming) {
-          const prefix = ref.current.restart ? "Restart Session" : "Start Session";
+          // a visit whose interview already completed restarts its record;
+          // otherwise Start continues an in-progress interview after a reload
+          const restart =
+            ref.current.restart || hasCompletedBefore(ref.current.visitId);
+          const prefix = restart ? "Restart Session" : "Start Session";
           clientRef.current!.sendText(`${prefix}: ${ref.current.visitId}`);
           ref.current.restart = false;
           setRestart(false);
@@ -157,7 +185,10 @@ export function useClinicalSession({ visitIdFromUrl, voiceFromUrl, t }: Options)
             ref.current.intakeComplete = true;
             setIntakeComplete(true);
             const vid = ref.current.visitId || "";
-            if (vid) setQueueNumber(queueNumberFromVisit(vid));
+            if (vid) {
+              setQueueNumber(queueNumberFromVisit(vid));
+              markCompleted(vid);
+            }
           }
           console.debug("tool_call", event.name, event.args, event.result);
         }
