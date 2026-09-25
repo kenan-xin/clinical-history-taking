@@ -8,7 +8,7 @@ import aiohttp
 from dotenv import load_dotenv
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from gemini_live import GeminiLive
 from google.genai import types
@@ -48,8 +48,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve static files
-app.mount("/static", StaticFiles(directory="frontend"), name="static")
+# The built React frontend (frontend/dist) is mounted as a static SPA at the
+# end of this file, after all API routes, so /ws etc. take precedence.
 
 GENIE_CHATBOT_URL = os.getenv("GENIE_CHATBOT_URL")
 INTAKE_AGENT_UUID = os.getenv("INTAKE_AGENT_UUID")
@@ -183,11 +183,6 @@ async def send_message_to_intake_agent_mock(message: str, session_id: str) -> di
     }
     logger.info(f"Intake agent mock response: {result}")
     return result
-
-
-@app.get("/")
-async def root():
-    return FileResponse("frontend/index.html")
 
 
 @app.websocket("/ws")
@@ -348,6 +343,11 @@ async def twilio_stream(websocket: WebSocket):
         except Exception:
             pass
         logger.info("Twilio media stream WebSocket closed")
+
+
+# ─── React frontend (built with `npm run build` in frontend/) ─────────────────
+# Mounted last so the API and WebSocket routes above take precedence.
+app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="spa")
 
 
 if __name__ == "__main__":

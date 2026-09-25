@@ -1,3 +1,8 @@
+/**
+ * PCMProcessor: AudioWorklet that batches mic input into 4096-sample
+ * Float32 chunks and posts them to the main thread.
+ * Served as its own module (not bundled) so AudioWorklet can load it.
+ */
 class PCMProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
@@ -6,21 +11,18 @@ class PCMProcessor extends AudioWorkletProcessor {
     this.bufferIndex = 0;
   }
 
-  process(inputs, outputs, parameters) {
+  process(inputs) {
     const input = inputs[0];
     if (!input || !input.length) return true;
 
     const channelData = input[0];
-
     for (let i = 0; i < channelData.length; i++) {
       this.buffer[this.bufferIndex++] = channelData[i];
-
       if (this.bufferIndex >= this.bufferSize) {
         this.port.postMessage(this.buffer);
         this.bufferIndex = 0;
       }
     }
-
     return true;
   }
 }

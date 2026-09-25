@@ -1,6 +1,6 @@
-# Gemini Live API - Python SDK & Vanilla JS
+# Gemini Live API - Python SDK & React
 
-A demonstration of the Gemini Live API using the [Google Gen AI Python SDK](https://github.com/googleapis/python-genai) for the backend and vanilla JavaScript for the frontend. This example shows how to build a real-time multimodal application with a robust Python backend handling the API connection.
+A demonstration of the Gemini Live API using the [Google Gen AI Python SDK](https://github.com/googleapis/python-genai) for the backend and a React 19 + shadcn/ui frontend. This example shows how to build a real-time multimodal application with a robust Python backend handling the API connection.
 
 ## Quick Start
 
@@ -20,9 +20,27 @@ uv run main.py
 
 ### 2. Frontend
 
-Open your browser and navigate to:
+The React app lives in `frontend/`. For normal use, build it once and let FastAPI serve it:
+
+```bash
+cd frontend
+npm install
+npm run build
+```
+
+Then open your browser and navigate to:
 
 [http://localhost:8000](http://localhost:8000)
+
+#### Frontend development mode
+
+For hot reload while working on the UI, run the Vite dev server alongside the
+backend — it proxies `/ws` to port 8000:
+
+```bash
+cd frontend
+npm run dev   # open http://localhost:5173
+```
 
 ## Features
 
@@ -30,7 +48,7 @@ Open your browser and navigate to:
 - **FastAPI Backend**: Robust, async-ready web server handling WebSocket connections.
 - **Real-time Streaming**: Bi-directional audio and video streaming.
 - **Tool Use**: Demonstrates how to register and handle server-side tools.
-- **Vanilla JS Frontend**: Lightweight frontend with no build steps or framework dependencies.
+- **React 19 + shadcn/ui Frontend**: Patient-facing UI built from the reference design in `design/` (mobile-first, tablet/desktop adaptive, 4 interface languages: English, 中文, Melayu, தமிழ்).
 
 ## Project Structure
 
@@ -39,12 +57,22 @@ Open your browser and navigate to:
 ├── main.py             # FastAPI server & WebSocket endpoint
 ├── gemini_live.py      # Gemini Live API wrapper using Gen AI SDK
 ├── requirements.txt    # Python dependencies
+├── design/             # Reference design export (visual contract)
 └── frontend/
-    ├── index.html      # User Interface
-    ├── main.js         # Application logic
-    ├── gemini-client.js # WebSocket client for backend communication
-    ├── media-handler.js # Audio/Video capture and playback
-    └── pcm-processor.js # AudioWorklet for PCM processing
+    ├── index.html      # Vite entry
+    ├── public/
+    │   └── pcm-processor.js  # AudioWorklet for PCM processing
+    └── src/
+        ├── App.tsx           # Screen flow: start → chat → ended
+        ├── hooks/
+        │   ├── use-clinical-session.ts  # Session state machine (WS + media)
+        │   └── use-visual-viewport.ts   # Keyboard-aware viewport fitting
+        ├── lib/
+        │   ├── gemini-client.ts  # WebSocket client (same wire format)
+        │   ├── media-handler.ts  # Mic capture, playback, camera/screen frames
+        │   └── protocol.ts       # Typed server events
+        ├── i18n/                 # en / zh / ms / ta strings
+        └── components/           # shadcn ui primitives + screens
 ```
 
 ## Configuration

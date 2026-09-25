@@ -1,0 +1,1436 @@
+<!doctype html>
+<!--
+  Patient frontend for the Gemini Live clinical history-taking backend
+  (gemini-live-genai-python-sdk). Copy this file to frontend/index.html:
+  it loads /static/media-handler.js and /static/gemini-client.js and talks to /ws.
+  Link format: /?visit=V-2026-07-17-0031  (optional: &voice=Kore)
+  Without those scripts (e.g. opened outside the server) it plays a labelled sample conversation.
+  Handset: Open Design platform-neutral shell (Apache-2.0); it collapses to full screen on phones.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <title>Before your visit · Health questions</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@500;600;700&display=swap" rel="stylesheet" />
+  <style>
+/* OD-LAYOUT-PRIMITIVES v1 — structure only: display, flex/grid, overflow, wrapping, ratio.
+   Put this @layer first; product CSS outside the layer always wins. */
+@layer od-layout {
+  :where(.od-stack,.od-row,.od-row-top,.od-cluster,.od-grid,.od-field,.od-stat,.od-cell,.od-tile) > :where(*) { min-width: 0; }
+  .od-stack   { display: flex; flex-direction: column; gap: var(--od-gap, 8px); }
+  .od-row     { display: flex; align-items: center; gap: var(--od-gap, 8px); }
+  .od-row-top { display: flex; align-items: flex-start; gap: var(--od-gap, 8px); }
+  .od-cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--od-gap, 8px); }
+  .od-fill    { flex: 1 1 0; min-width: 0; }
+  .od-fixed   { flex: none; }
+  .od-grid    { display: grid; gap: var(--od-gap, 12px); grid-template-columns: repeat(var(--od-cols, 3), minmax(0, 1fr)); }
+  .od-stat, .od-field, .od-cell { display: grid; gap: var(--od-gap, 2px); }
+  :where(.od-stat,.od-field,.od-cell) > :where(*) { display: block; }
+  .od-tile { display: grid; grid-template-rows: auto 1fr; }
+  :where(.od-tile) > :where(*) { display: block; }
+  .od-media { display: block; width: 100%; height: auto; aspect-ratio: var(--od-ratio, auto); }
+  .od-media-cover { object-fit: cover; }
+  .od-truncate { display: block; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .od-clamp-2, .od-clamp-3 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+  .od-clamp-2 { -webkit-line-clamp: 2; }
+  .od-clamp-3 { -webkit-line-clamp: 3; }
+  .od-lines-2 { min-height: calc(2 * 1.4em); }
+  .od-nowrap  { white-space: nowrap; }
+  .od-keep    { word-break: keep-all; overflow-wrap: anywhere; }
+  .od-screen { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; }
+  .od-scroll { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+  .od-rail { display: flex; gap: var(--od-gap, 8px); overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none;
+             padding-inline: var(--od-rail-pad, 16px); scroll-padding-inline: var(--od-rail-pad, 16px); }
+  .od-rail::-webkit-scrollbar { display: none; }
+  :where(.od-rail) > :where(*) { flex: none; scroll-snap-align: start; }
+  :where(.od-rail) > :where(:last-child) { margin-inline-end: var(--od-rail-pad, 16px); }
+  .od-spacer { flex: none; visibility: hidden; pointer-events: none; }
+  .od-touch  { min-width: 44px; min-height: 44px; }
+}
+/* /OD-LAYOUT-PRIMITIVES v1 */
+
+    :root {
+      /* shell */
+      --phone-screen-width: 390px;
+      --phone-screen-height: 844px;
+      --phone-bezel: 10px;
+      --phone-outer-radius: 52px;
+      --phone-screen-radius: 42px;
+      --phone-safe-top: 50px;
+      --phone-safe-bottom: 29px;
+      --phone-system-fg: #10292b;
+      --phone-screen-bg: #f7fafa;
+      --phone-stage-bg: #e4ebeb;
+
+      /* product tokens */
+      --bg: #f7fafa;
+      --surface: #ffffff;
+      --ink: #10292b;
+      --ink-2: #4a6163;
+      --line: #d6e3e2;
+      --primary: #0b6e69;
+      --primary-strong: #085652;
+      --primary-soft: #e3f2f0;
+      --on-primary: #ffffff;
+      --urgent: #b93a26;
+      --urgent-strong: #962e1e;
+      --urgent-soft: #fbeae6;
+      --success: #1f7a4d;
+      --success-soft: #e2f3ea;
+      --disabled-bg: #c9d6d5;
+      --disabled-ink: #3d5254;
+
+      --font-display: "Figtree", system-ui, sans-serif;
+      --font-body: system-ui, -apple-system, "Segoe UI", "Noto Sans", sans-serif;
+      --fs-xs: 14px;
+      --fs-s: 16px;
+      --fs-m: 17px;
+      --fs-l: 22px;
+      --fs-xl: 28px;
+      --fs-xxl: 32px;
+
+      --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px; --s6: 24px; --s8: 32px; --s10: 40px;
+      --r-s: 12px; --r-m: 16px; --r-l: 20px; --r-pill: 999px;
+      --shadow: 0 1px 2px rgba(16,41,43,.06), 0 4px 16px rgba(16,41,43,.06);
+
+      --t-in: 200ms; --t-out: 140ms;
+      --ease-in: cubic-bezier(.4,0,1,1);
+      --ease-out: cubic-bezier(0,0,.2,1);
+    }
+
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+    html, body { margin: 0; min-height: 100%; }
+    button, label, summary { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+    body {
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      padding: 32px;
+      background:
+        radial-gradient(circle at 50% 15%, rgba(255,255,255,.94), transparent 35%),
+        var(--phone-stage-bg);
+      color: var(--ink);
+      font-family: var(--font-body);
+    }
+
+    .phone-frame {
+      position: relative;
+      width: calc(var(--phone-screen-width) + var(--phone-bezel) * 2);
+      height: calc(var(--phone-screen-height) + var(--phone-bezel) * 2);
+      padding: var(--phone-bezel);
+      border-radius: var(--phone-outer-radius);
+      background:
+        linear-gradient(145deg, rgba(255,255,255,.2), transparent 17%),
+        linear-gradient(160deg, #3f4146 0%, #202227 48%, #0b0c0f 100%);
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,.13),
+        inset 0 0 0 2px rgba(0,0,0,.85),
+        0 32px 68px -20px rgba(10,12,16,.52),
+        0 10px 24px -10px rgba(10,12,16,.32);
+      isolation: isolate;
+    }
+    .phone-frame::before,
+    .phone-frame::after {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      top: 96px;
+      bottom: 96px;
+      width: 2px;
+      background: linear-gradient(to bottom, transparent, rgba(255,255,255,.13) 16%, transparent 30%, transparent 72%, rgba(255,255,255,.07) 88%, transparent);
+    }
+    .phone-frame::before { left: 0; }
+    .phone-frame::after { right: 0; }
+    .hardware-button {
+      position: absolute;
+      width: 4px;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #08090b, #2a2d33 60%, #08090b);
+      box-shadow: inset 0 1px rgba(255,255,255,.08);
+    }
+    .hardware-button.volume { left: -3px; top: 222px; height: 86px; }
+    .hardware-button.power { right: -3px; top: 270px; height: 82px; }
+    .phone-screen {
+      position: relative;
+      width: var(--phone-screen-width);
+      height: var(--phone-screen-height);
+      overflow: hidden;
+      border-radius: var(--phone-screen-radius);
+      background: var(--phone-screen-bg);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+    }
+    .phone-content {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      padding-top: var(--phone-safe-top);
+      padding-bottom: var(--phone-safe-bottom);
+      background: var(--phone-screen-bg);
+    }
+    .camera-dot {
+      position: absolute;
+      z-index: 20;
+      top: 13px;
+      left: 50%;
+      width: 10px;
+      height: 10px;
+      transform: translateX(-50%);
+      border-radius: 50%;
+      background: radial-gradient(circle at 38% 35%, #344154 0 12%, #0a0c10 34%, #000 76%);
+      box-shadow: 0 0 0 1px rgba(255,255,255,.06);
+      pointer-events: none;
+    }
+    .status-bar {
+      position: absolute;
+      z-index: 15;
+      inset: 0 0 auto;
+      height: var(--phone-safe-top);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 56px minmax(0, 1fr);
+      align-items: start;
+      padding: 14px 20px 0;
+      color: var(--phone-system-fg);
+      opacity: .8;
+      pointer-events: none;
+    }
+    .status-time { justify-self: start; display: flex; align-items: center; height: 15px; font-size: 14px; font-weight: 560; line-height: 1; letter-spacing: .01em; }
+    .status-cutout-zone { width: 56px; }
+    .status-icons { justify-self: end; display: inline-flex; align-items: center; height: 15px; gap: 6px; }
+    .status-icons svg { display: block; flex: none; fill: none; stroke: currentColor; stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; }
+    .status-icons .connectivity { width: 15px; height: 12px; }
+    .status-icons .wifi { width: 15px; height: 12px; }
+    .status-icons .battery { width: 19px; height: 11px; }
+    .gesture-indicator {
+      position: absolute;
+      z-index: 20;
+      left: 50%;
+      bottom: 8px;
+      width: 96px;
+      height: 4px;
+      transform: translateX(-50%);
+      border-radius: 99px;
+      background: var(--phone-system-fg);
+      opacity: .86;
+      pointer-events: none;
+    }
+    /* Responsive on every device: this is a real app, so the simulated handset is not drawn.
+       The app fills the visible viewport (--app-h follows the on-screen keyboard, set from
+       visualViewport in the script) and uses the device's own safe areas. Mobile-first: the
+       base styles are the phone layout; tablet (>=768px) and desktop (>=1024px) layouts are
+       at the end of the stylesheet. */
+    :root {
+      --phone-safe-top: env(safe-area-inset-top, 0px);
+      --phone-safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+    body { padding: 0; display: block; min-height: 0; background: var(--bg); }
+    .phone-frame { position: fixed; top: var(--app-top, 0px); left: 0; width: 100%; height: var(--app-h, 100dvh); padding: 0; border-radius: 0; background: none; box-shadow: none; }
+    .phone-frame::before, .phone-frame::after, .hardware-button,
+    .status-bar, .camera-dot, .gesture-indicator { display: none; }
+    .phone-screen { width: 100%; height: 100%; border-radius: 0; box-shadow: none; }
+    .phone-content { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+
+    /* ---------- app ---------- */
+    #app { height: 100%; font-size: var(--fs-m); line-height: 1.5; color: var(--ink); }
+    /* minmax(0,1fr) column: wide children (rails, long words) can never widen the screen */
+    .screen { height: 100%; grid-template-columns: minmax(0, 1fr); background: var(--bg); animation: enter var(--t-in) var(--ease-out); }
+    .screen[hidden] { display: none; }
+    /* layout classes (.od-stack etc.) set display, so [hidden] must win explicitly */
+    [hidden] { display: none !important; }
+    @keyframes enter { from { opacity: 0; transform: translateY(8px); } }
+
+    h1, h2, h3 { font-family: var(--font-display); margin: 0; color: var(--ink); letter-spacing: -.01em; }
+    h1 { font-size: clamp(26px, 7.5vw, var(--fs-xxl)); line-height: 1.15; font-weight: 700; }
+    h2 { font-size: var(--fs-xl); line-height: 1.2; font-weight: 700; }
+    p { margin: 0; }
+    h1:focus, h2:focus, [tabindex="-1"]:focus { outline: none; }
+    .muted { color: var(--ink-2); }
+    .small { font-size: var(--fs-xs); line-height: 1.45; }
+    .eyebrow { font-size: var(--fs-xs); font-weight: 600; color: var(--primary-strong); letter-spacing: .02em; }
+
+    svg.i { display: block; width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+    svg.i-s { width: 20px; height: 20px; }
+
+    button, input, textarea, select { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    :focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; border-radius: var(--r-s); }
+
+    .btn {
+      display: flex; align-items: center; justify-content: center; gap: var(--s2);
+      width: 100%; min-height: 52px; padding: 0 var(--s5);
+      border: 1.5px solid transparent; border-radius: var(--r-m);
+      font-family: var(--font-display); font-size: var(--fs-m); font-weight: 600;
+      transition: background-color var(--t-in) var(--ease-out), border-color var(--t-in) var(--ease-out);
+    }
+    .btn-primary { background: var(--primary); color: var(--on-primary); }
+    .btn-secondary { background: var(--surface); color: var(--ink); border-color: var(--line); }
+    .btn-danger { background: var(--urgent); color: var(--on-primary); }
+    .btn-link { width: auto; min-height: 44px; padding: 0 var(--s2); background: none; color: var(--primary-strong); font-size: var(--fs-s); text-decoration: underline; text-underline-offset: 3px; }
+    .btn:disabled { background: var(--disabled-bg); color: var(--disabled-ink); cursor: not-allowed; }
+    @media (hover: hover) {
+      .btn-primary:not(:disabled):hover { background: var(--primary-strong); }
+      .btn-secondary:hover { border-color: var(--primary); background: var(--primary-soft); }
+      .btn-danger:hover { background: var(--urgent-strong); }
+      .btn-link:hover { color: var(--ink); }
+    }
+    .spinner { width: 20px; height: 20px; flex: none; border-radius: 50%; border: 2.5px solid currentColor; border-right-color: transparent; animation: spin 700ms linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .banner { display: flex; gap: var(--s2); align-items: flex-start; padding: var(--s3) var(--s4); border-radius: var(--r-s); font-size: var(--fs-s); }
+    .banner[hidden] { display: none; }
+    .banner.error { background: var(--urgent-soft); color: var(--urgent-strong); }
+    .banner.info { background: var(--primary-soft); color: var(--primary-strong); }
+
+    /* start */
+    .start-head { padding: var(--s4) var(--s5) 0; }
+    .start-body { padding: var(--s4) var(--s5) var(--s6); }
+    .start-body > p.lead { margin-top: var(--s3); color: var(--ink-2); }
+    .visit { margin-top: var(--s6); padding: var(--s4) var(--s5); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); box-shadow: var(--shadow); }
+    .visit-id { font-family: var(--font-display); font-size: var(--fs-l); font-weight: 700; overflow-wrap: anywhere; line-height: 1.3; }
+    .field { --od-gap: 6px; }
+    .field-label { font-weight: 600; font-size: var(--fs-s); }
+    .text-input, .select { width: 100%; min-height: 52px; padding: var(--s3) var(--s4); border: 1.5px solid var(--line); border-radius: var(--r-s); background: var(--surface); font-size: var(--fs-m); }
+    .text-input:focus-visible, .select:focus-visible { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+    .text-input[aria-invalid="true"] { border-color: var(--urgent); }
+    .field-error { color: var(--urgent-strong); font-size: var(--fs-xs); font-weight: 600; }
+    .field-error[hidden] { display: none; }
+    .points { --od-gap: 16px; margin-top: var(--s6); }
+    .point { --od-gap: 12px; }
+    /* 8px padding + 24px icon = 40px tile: centred by the box model alone, whatever the layout engine */
+    .point-icon { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 8px; border-radius: var(--r-s); background: var(--primary-soft); color: var(--primary-strong); }
+    .point .od-fill > strong { display: block; font-size: var(--fs-m); }
+    .point .od-fill > span { display: block; color: var(--ink-2); font-size: var(--fs-s); }
+    details.options { margin-top: var(--s6); border-top: 1px solid var(--line); padding-top: var(--s2); }
+    details.options summary { display: flex; align-items: center; justify-content: space-between; min-height: 48px; cursor: pointer; font-weight: 600; color: var(--primary-strong); list-style: none; }
+    details.options summary::-webkit-details-marker { display: none; }
+    details.options summary svg { transition: transform var(--t-in) var(--ease-out); }
+    details.options[open] summary svg { transform: rotate(180deg); }
+    .options-body { --od-gap: 16px; padding: var(--s2) 0 var(--s2); }
+    .check { display: flex; gap: var(--s3); align-items: flex-start; cursor: pointer; }
+    .check input { width: 22px; height: 22px; margin: 2px 0 0; flex: none; accent-color: var(--primary); }
+    .check strong { display: block; font-weight: 600; font-size: var(--fs-s); }
+    .check span { display: block; color: var(--ink-2); font-size: var(--fs-xs); }
+    .footer { padding: var(--s3) var(--s5) var(--s5); --od-gap: 12px; }
+
+    /* conversation */
+    .chat-head { background: var(--surface); border-bottom: 1px solid var(--line); padding: var(--s2) var(--s3) var(--s2) var(--s5); }
+    .chat-title strong { font-family: var(--font-display); font-size: var(--fs-m); font-weight: 600; }
+    .conn { display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--ink-2); }
+    .conn i { width: 8px; height: 8px; border-radius: 50%; background: var(--success); flex: none; }
+    .conn.off i { background: var(--ink-2); }
+    .end-btn { min-height: 44px; padding: 0 var(--s4); border: 1.5px solid var(--line); border-radius: var(--r-pill); background: var(--surface); color: var(--urgent-strong); font-weight: 600; font-size: var(--fs-s); }
+    @media (hover: hover) { .end-btn:hover { border-color: var(--urgent); background: var(--urgent-soft); } }
+    .sample-note { margin: var(--s3) var(--s4) 0; }
+    .msgs { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s4); }
+    .msg { max-width: 86%; padding: var(--s3) var(--s4); border-radius: var(--r-l); font-size: var(--fs-m); line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; animation: bubble var(--t-in) var(--ease-out) both; }
+    .msg.gemini { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 6px; }
+    .msg.user { align-self: flex-end; background: var(--primary); color: var(--on-primary); border-bottom-right-radius: 6px; }
+    .msg.note { align-self: stretch; max-width: none; white-space: normal; display: flex; gap: var(--s2); background: var(--urgent-soft); color: var(--urgent-strong); font-size: var(--fs-s); }
+    .msg.thinking { display: flex; align-items: center; gap: var(--s3); color: var(--ink-2); font-size: var(--fs-s); white-space: normal; }
+    .dots { display: inline-flex; gap: 5px; }
+    .dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-2); animation: dot 1s var(--ease-out) infinite; }
+    .dots i:nth-child(2) { animation-delay: 150ms; }
+    .dots i:nth-child(3) { animation-delay: 300ms; }
+    @keyframes dot { 0%, 60%, 100% { opacity: .3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+    @keyframes bubble { from { opacity: 0; transform: translateY(8px); } }
+    .empty { margin: auto; padding: var(--s8) var(--s6); text-align: center; color: var(--ink-2); }
+
+    .chat-foot { background: var(--surface); border-top: 1px solid var(--line); padding: var(--s3) var(--s4) var(--s3); --od-gap: 12px; }
+    /* phone: the session panel dissolves into the footer stack; order = status, camera, text box, controls */
+    .panel { display: contents; }
+    .state { order: 1; }
+    .cam { order: 2; }
+    .composer { order: 3; }
+    .controls { order: 4; }
+    .state { display: flex; align-items: center; justify-content: center; gap: var(--s2); min-height: 28px; font-family: var(--font-display); font-weight: 600; font-size: var(--fs-s); text-align: center; }
+    .state.warn { color: var(--urgent-strong); }
+    .levels { display: inline-flex; align-items: center; gap: 3px; height: 18px; }
+    .levels i { width: 4px; height: 100%; border-radius: 2px; background: var(--primary); transform: scaleY(.3); }
+    .state.speaking .levels i, .state.listening .levels i { animation: level 900ms var(--ease-out) infinite; }
+    .levels i:nth-child(2) { animation-delay: 120ms; }
+    .levels i:nth-child(3) { animation-delay: 240ms; }
+    @keyframes level { 0%, 100% { transform: scaleY(.3); } 50% { transform: scaleY(1); } }
+    .cam { position: relative; border-radius: var(--r-m); overflow: hidden; background: #0e1c1d; }
+    .cam[hidden] { display: none; }
+    .cam video { display: block; width: 100%; aspect-ratio: 4 / 3; max-height: 200px; object-fit: contain; background: #0e1c1d; }
+    .cam-label { padding: var(--s2) var(--s3); background: var(--primary-soft); color: var(--primary-strong); font-size: var(--fs-xs); font-weight: 600; }
+    .controls { display: flex; justify-content: center; align-items: flex-start; gap: var(--s6); }
+    .ctl { display: grid; justify-items: center; gap: 6px; min-width: 64px; padding: 0; border: 0; background: none; color: var(--ink); font-size: var(--fs-xs); font-weight: 600; }
+    .ctl-icon { display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); transition: background-color var(--t-in) var(--ease-out), box-shadow var(--t-in) var(--ease-out); }
+    .ctl[aria-pressed="true"] .ctl-icon { background: var(--primary-soft); border-color: var(--primary); color: var(--primary-strong); }
+    .ctl.mic .ctl-icon { width: 72px; height: 72px; border: 0; background: var(--primary); color: var(--on-primary); }
+    .ctl.mic .ctl-icon svg { width: 30px; height: 30px; }
+    .ctl.mic[aria-pressed="false"] .ctl-icon { background: var(--surface); color: var(--ink); border: 1.5px solid var(--ink-2); }
+    .ctl.mic.live .ctl-icon { box-shadow: 0 0 0 8px var(--primary-soft); }
+    .ctl:disabled { cursor: not-allowed; }
+    .ctl:disabled .ctl-icon { background: var(--disabled-bg); color: var(--disabled-ink); border-color: transparent; }
+    .ctl[hidden] { display: none; }
+    .ctl:focus-visible { outline: none; }
+    .ctl:focus-visible .ctl-icon { outline: 3px solid var(--primary); outline-offset: 3px; }
+    @media (hover: hover) { .ctl:not(:disabled):hover .ctl-icon { border-color: var(--primary); } .ctl.mic[aria-pressed="true"]:hover .ctl-icon { background: var(--primary-strong); } }
+    .composer { --od-gap: 8px; }
+    .composer[hidden] { display: none; }
+    .composer textarea { min-height: 48px; max-height: 120px; padding: 12px var(--s4); border: 1.5px solid var(--line); border-radius: 24px; background: var(--bg); resize: none; font-size: var(--fs-m); line-height: 1.4; }
+    .composer textarea:focus-visible { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+    .send { display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; flex: none; border: 0; border-radius: 50%; background: var(--primary); color: var(--on-primary); }
+    .send:disabled { background: var(--disabled-bg); color: var(--disabled-ink); cursor: not-allowed; }
+    @media (hover: hover) { .send:not(:disabled):hover { background: var(--primary-strong); } }
+
+    /* ended */
+    .ended-body { padding: var(--s10) var(--s5) var(--s6); text-align: center; }
+    .ended-icon { display: flex; align-items: center; justify-content: center; width: 72px; height: 72px; margin: 0 auto var(--s5); border-radius: 50%; background: var(--success-soft); color: var(--success); }
+    .ended-icon.lost { background: var(--urgent-soft); color: var(--urgent-strong); }
+    .ended-icon svg.i { width: 34px; height: 34px; stroke-width: 2.25; }
+    .ended-body p { margin-top: var(--s3); color: var(--ink-2); }
+
+    /* sheet */
+    .overlay { position: absolute; inset: 0; z-index: 18; display: grid; align-items: end; background: rgba(16,41,43,.5); animation: fade var(--t-in) var(--ease-out); }
+    .overlay[hidden] { display: none; }
+    @keyframes fade { from { opacity: 0; } }
+    .sheet { padding: var(--s6) var(--s5) calc(var(--phone-safe-bottom) + var(--s4)); border-radius: 24px 24px 0 0; background: var(--surface); animation: sheet 260ms var(--ease-out); }
+    @keyframes sheet { from { transform: translateY(40px); opacity: 0; } }
+    .sheet h2 { font-size: 24px; }
+    .sheet p { margin-top: var(--s2); color: var(--ink-2); }
+    .sheet .actions { --od-gap: 12px; margin-top: var(--s6); }
+
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+    /* ---------- interface language switch ---------- */
+    .start-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s3); }
+    .lang-switch { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: var(--r-l); background: var(--surface); }
+    .lang-switch button { min-width: 44px; min-height: 44px; padding: 0 var(--s3); border: 0; border-radius: var(--r-m); background: transparent; color: var(--ink-2); font-size: 15px; font-weight: 600; }
+    .lang-switch button[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); }
+    @media (hover: hover) { .lang-switch button:not([aria-pressed="true"]):hover { background: var(--primary-soft); color: var(--primary-strong); } }
+    .lang-select { min-height: 44px; max-width: 120px; padding: 0 var(--s3); border: 1.5px solid var(--line); border-radius: var(--r-pill); background: var(--surface); font-size: 15px; font-weight: 600; }
+    /* Tamil and Malay run long: keep headings from crowding narrow screens */
+    html[lang="ta"] h1, html[lang="ta"] #start .start-body > h1 { font-size: clamp(22px, 5.5vw, 30px); line-height: 1.3; }
+    html[lang="ta"] body, html[lang="ta"] #app { line-height: 1.6; }
+
+    /* ---------- App shell parts: hidden on phones ---------- */
+    .appbar, .sidenav, .panel-info, .composer-mic, .kbd-hint { display: none; }
+    .main { height: 100%; }
+
+    /* ---------- Tablet (>=768px): iPad-style app. Top bar, split-pane sign-in, split-view conversation ---------- */
+    @media (min-width: 768px) {
+      #app { display: grid; grid-template-rows: auto minmax(0, 1fr); }
+      .appbar { display: flex; align-items: center; gap: var(--s3); min-height: 56px; padding: var(--s2) var(--s6); background: var(--surface); border-bottom: 1px solid var(--line); }
+      /* 6px padding + 20px icon = 32px mark */
+      .brand-mark { display: flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 32px; padding: 6px; border-radius: 8px; background: var(--primary); color: var(--on-primary); }
+      .brand-mark svg.i { width: 20px; height: 20px; }
+      .brand { font-family: var(--font-display); font-size: 17px; font-weight: 700; }
+      .appbar-visit { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: var(--r-pill); background: var(--primary-soft); color: var(--primary-strong); font-size: var(--fs-xs); font-weight: 600; white-space: nowrap; }
+      .main { position: relative; height: auto; min-height: 0; overflow-y: auto; }
+
+      /* start: one sign-in sheet split in two panes. Intro + tips left, visit form right. */
+      #start {
+        height: auto; width: min(100% - 48px, 1040px); margin: var(--s6) auto;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto auto auto auto;
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l); box-shadow: var(--shadow); overflow: hidden;
+      }
+      #start::before { content: ""; grid-column: 1; grid-row: 1 / -1; background: var(--primary-soft); }
+      #start .start-body { display: contents; }
+      #start .start-head, #start .start-body > h1, #start .start-body > .lead, #start .start-body > .points { grid-column: 1; margin: 0; padding-inline: var(--s8); }
+      #start .start-head { grid-row: 1; padding-top: var(--s8); }
+      #start .start-body > h1 { grid-row: 2; padding-top: var(--s3); font-size: clamp(28px, 3.4vw, 36px); }
+      #start .start-body > .lead { grid-row: 3; padding-top: var(--s3); }
+      #start .start-body > .points { grid-row: 4; padding-top: var(--s6); padding-bottom: var(--s8); }
+      #start .point-icon { background: var(--surface); }
+      #start .start-body > .visit { grid-column: 2; grid-row: 1 / 3; align-self: end; margin: var(--s8) var(--s8) 0; box-shadow: none; }
+      #start .start-body > details.options { grid-column: 2; grid-row: 3; margin: var(--s4) var(--s8) 0; }
+      #start .footer { grid-column: 2; grid-row: 4; align-self: start; padding: var(--s5) var(--s8) var(--s8); }
+
+      /* conversation: split view. Session pane left; transcript right with a floating toolbar */
+      #chat { grid-template-columns: 300px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto auto; }
+      #chat .chat-head { grid-column: 1 / -1; padding: var(--s3) var(--s6); }
+      #chat .chat-foot { display: contents; }
+      #chat .panel { grid-column: 1; grid-row: 2 / -1; display: flex; flex-direction: column; gap: var(--s4); min-height: 0; overflow-y: auto; padding: var(--s5); background: var(--surface); border-right: 1px solid var(--line); }
+      #chat .panel .state { justify-content: flex-start; min-height: 52px; padding: var(--s3) var(--s4); border-radius: var(--r-m); background: var(--bg); text-align: left; }
+      #chat .panel-info { display: grid; gap: 2px; padding: var(--s4); border: 1px solid var(--line); border-radius: var(--r-m); }
+      #chat .panel-info strong { font-family: var(--font-display); font-size: 18px; overflow-wrap: anywhere; }
+      #chat #scroll { grid-column: 2; grid-row: 2; }
+      .msgs { max-width: 720px; margin-inline: auto; padding: var(--s6); }
+      .sample-note { max-width: 672px; margin-inline: auto; }
+      #chat .controls { grid-column: 2; grid-row: 3; justify-self: center; align-items: center; gap: var(--s2); margin: var(--s2) 0 var(--s4); padding: var(--s2); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-pill); box-shadow: 0 6px 24px rgba(16,41,43,.12); }
+      #chat .ctl { display: flex; flex-direction: row; align-items: center; gap: var(--s2); min-width: 0; min-height: 48px; padding: 0 var(--s4) 0 var(--s1); border-radius: var(--r-pill); font-size: var(--fs-s); }
+      #chat .ctl-icon { width: 40px; height: 40px; border: 0; background: var(--primary-soft); color: var(--primary-strong); box-shadow: none; }
+      #chat .ctl.mic .ctl-icon { width: 40px; height: 40px; background: var(--primary); color: var(--on-primary); }
+      #chat .ctl.mic .ctl-icon svg { width: 24px; height: 24px; }
+      #chat .ctl.mic[aria-pressed="false"] .ctl-icon { background: var(--bg); color: var(--ink); border: 1.5px solid var(--ink-2); }
+      #chat .ctl[aria-pressed="true"] { background: var(--primary-soft); }
+      #chat .ctl:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+      @media (hover: hover) { #chat .ctl:not(:disabled):hover { background: var(--primary-soft); } }
+      #chat .composer { grid-column: 2; grid-row: 4; padding: var(--s3) var(--s6) var(--s4); background: var(--surface); border-top: 1px solid var(--line); }
+
+      /* ended: a centred card on a tinted ground */
+      #ended { grid-template-rows: minmax(0, 1fr) auto auto minmax(0, 1fr); background: var(--primary-soft); }
+      #ended > span { grid-row: 1; }
+      .ended-body { grid-row: 2; width: min(100% - 48px, 480px); justify-self: center; overflow: visible; padding: var(--s8) var(--s8) var(--s4); background: var(--surface); border-radius: var(--r-l) var(--r-l) 0 0; }
+      #ended .footer { grid-row: 3; width: min(100% - 48px, 480px); justify-self: center; padding: var(--s4) var(--s8) var(--s8); background: var(--surface); border-radius: 0 0 var(--r-l) var(--r-l); }
+
+      /* dialogs open centred instead of as bottom sheets */
+      .overlay { align-items: center; justify-items: center; padding: var(--s6); }
+      .sheet { width: 100%; max-width: 480px; border-radius: 24px; padding-bottom: var(--s6); }
+    }
+
+    /* ---------- Desktop (>=1024px): desktop web app. App bar + step sidebar, chat log, docked composer ---------- */
+    @media (min-width: 1024px) {
+      :root { --fs-m: 16px; --r-s: 8px; --r-m: 10px; --r-l: 12px; }
+      .btn { min-height: 44px; font-size: 16px; }
+
+      #app { grid-template-columns: 248px minmax(0, 1fr); }
+      .appbar { grid-column: 1 / -1; padding-inline: var(--s5); }
+      .sidenav { grid-column: 1; grid-row: 2; display: flex; flex-direction: column; justify-content: space-between; gap: var(--s6); overflow-y: auto; padding: var(--s6) var(--s4); background: var(--surface); border-right: 1px solid var(--line); }
+      .main { grid-column: 2; grid-row: 2; }
+      .nav-label { padding: 0 var(--s3); font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+      .steps { list-style: none; display: grid; gap: 2px; margin: var(--s2) 0 0; padding: 0; }
+      .steps li { display: flex; align-items: center; gap: var(--s3); min-height: 40px; padding: 0 var(--s3); border-radius: var(--r-s); color: var(--ink-2); font-size: 15px; font-weight: 600; }
+      .step-num { display: flex; align-items: center; justify-content: center; flex: none; width: 24px; height: 24px; border: 1.5px solid currentColor; border-radius: 50%; font-size: 12px; }
+      .steps li[aria-current="step"] { background: var(--primary-soft); color: var(--primary-strong); }
+      .steps li[aria-current="step"] .step-num { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+      .steps li.done { color: var(--ink); }
+      .steps li.done .step-num { background: var(--success-soft); border-color: var(--success); color: var(--success); }
+      .sidenav-help { padding: var(--s4); border-radius: var(--r-m); background: var(--bg); color: var(--ink-2); font-size: 14px; }
+      .sidenav-help strong { display: block; margin-bottom: 2px; color: var(--ink); font-size: 15px; }
+
+      #start { margin: var(--s10) auto; }
+      #start .start-head, #start .start-body > h1, #start .start-body > .lead, #start .start-body > .points { padding-inline: var(--s10); }
+      #start .start-body > .visit { margin-inline: var(--s10); }
+      #start .start-body > details.options { margin-inline: var(--s10); }
+      #start .footer { padding-inline: var(--s10); }
+
+      /* conversation: page header, chat log + docked composer left, session inspector right */
+      #chat { grid-template-columns: minmax(0, 1fr) 320px; grid-template-rows: auto minmax(0, 1fr) auto; }
+      #chat #scroll { grid-column: 1; grid-row: 2; }
+      #chat .panel { grid-column: 2; grid-row: 2; padding: var(--s5); border-right: 0; border-left: 1px solid var(--line); }
+      #chat .controls { grid-column: 2; grid-row: 3; justify-self: stretch; justify-content: space-around; margin: 0; padding: var(--s2) var(--s4); border: 0; border-top: 1px solid var(--line); border-left: 1px solid var(--line); border-radius: 0; box-shadow: none; }
+      #chat .ctl { flex-direction: column; gap: 4px; min-height: 0; padding: var(--s1) var(--s2); border-radius: var(--r-s); font-size: 14px; }
+      #chat .ctl-icon, #chat .ctl.mic .ctl-icon { width: 36px; height: 36px; }
+      #chat .ctl-icon svg, #chat .ctl.mic .ctl-icon svg { width: 20px; height: 20px; }
+      #chat #keys-btn { display: none; }
+      #chat #composer[hidden] { display: flex !important; }
+      #chat .composer { grid-column: 1; grid-row: 3; flex-wrap: wrap; padding: var(--s3) max(var(--s6), calc((100% - 760px) / 2)); }
+      #chat .composer textarea { min-height: 40px; padding: 9px 12px; border-radius: var(--r-s); font-size: 16px; }
+      #chat .send { width: 40px; height: 40px; border-radius: var(--r-s); }
+      #chat .send svg.i { width: 20px; height: 20px; }
+      .composer-mic { display: flex; align-items: center; justify-content: center; flex: none; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: var(--r-s); background: var(--surface); color: var(--ink); }
+      .composer-mic svg.i { width: 20px; height: 20px; }
+      .composer-mic[aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+      @media (hover: hover) { .composer-mic:hover { border-color: var(--primary); } }
+      .kbd-hint { flex-basis: 100%; margin: 0; color: var(--ink-2); font-size: 13px; }
+      .kbd-hint kbd { font: inherit; padding: 0 4px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink); }
+      @media (pointer: fine) { .kbd-hint { display: block; } }
+
+      /* transcript as a chat log: full-width rows with author + time, not phone bubbles */
+      .msgs { max-width: 760px; gap: var(--s4); padding: var(--s6); }
+      .msg { align-self: stretch; max-width: none; padding: var(--s3) var(--s4); border-radius: var(--r-m); font-size: 16px; }
+      .msg.gemini { padding-inline: 0; background: transparent; border: 0; }
+      .msg.user { background: var(--primary-soft); color: var(--ink); }
+      .msg[data-who]::before { content: attr(data-who) "  ·  " attr(data-time); display: block; margin-bottom: 2px; color: var(--ink-2); font-size: 13px; font-weight: 600; }
+      .msg.user[data-who]::before { color: var(--primary-strong); }
+      .cam video { max-height: 200px; }
+    }
+
+    /* language switch placement: start header + chat picker on phones, app bar from tablet up */
+    @media (min-width: 768px) {
+      .start-head .lang-switch, .chat-head .lang-select { display: none; }
+      .appbar .brand { margin-right: auto; }
+      .appbar-visit { margin-left: 0; }
+      .appbar .lang-switch { padding: 2px; }
+      .appbar .lang-switch button { min-height: 36px; font-size: 14px; }
+    }
+
+    /* Short screens (phones in landscape): smaller controls so the conversation keeps room.
+       Kept after the component rules so it wins the cascade. */
+    @media (max-height: 520px) {
+      .start-head { padding-top: var(--s2); }
+      .start-body { padding-top: var(--s2); }
+      .ctl-icon { width: 44px; height: 44px; }
+      .ctl.mic .ctl-icon { width: 56px; height: 56px; }
+      .ctl.mic .ctl-icon svg { width: 26px; height: 26px; }
+      .chat-foot { padding-top: var(--s2); padding-bottom: var(--s2); --od-gap: 8px; }
+      .cam video { max-height: 112px; }
+      .ended-body { padding-top: var(--s5); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+      .state.speaking .levels i, .state.listening .levels i { transform: scaleY(.8); }
+    }
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></symbol>
+    <symbol id="i-mic-off" viewBox="0 0 24 24"><path d="M15 9.5V6a3 3 0 0 0-5.8-1.1M9 9v2a3 3 0 0 0 4.6 2.5M18.5 11a6.5 6.5 0 0 1-1 3.4M5.5 11a6.5 6.5 0 0 0 10.2 5.3M12 17.5V21M4 4l16 16"/></symbol>
+    <symbol id="i-cam" viewBox="0 0 24 24"><rect x="3" y="6.5" width="13" height="11" rx="2"/><path d="M16 10.5l5-3v9l-5-3"/></symbol>
+    <symbol id="i-screen" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8 20h8M12 16.5V20"/></symbol>
+    <symbol id="i-keys" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7.5 14h9"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3.5L2.8 19.5h18.4L12 3.5z"/><path d="M12 10v4M12 17h.01"/></symbol>
+    <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M2.5 8.5a14 14 0 0 1 5-3M11 5a14 14 0 0 1 10.5 3.5M5.5 12a9.5 9.5 0 0 1 4-2.3M15 10a9.5 9.5 0 0 1 3.5 2M9 15.3a4.5 4.5 0 0 1 6 0M12 19h.01M3 3l18 18"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.5 5.4 3.5 8.5s-1 5.9-3.5 8.5c-2.5-2.6-3.5-5.4-3.5-8.5s1-5.9 3.5-8.5z"/></symbol>
+    <symbol id="i-nurse" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.6-3.8 3.4-6 7-6s6.4 2.2 7 6"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  </svg>
+
+  <div class="phone-frame" data-phone-shell data-platform="neutral">
+    <span class="hardware-button volume" aria-hidden="true"></span>
+    <span class="hardware-button power" aria-hidden="true"></span>
+
+    <section class="phone-screen" data-phone-screen>
+      <main class="phone-content" data-phone-content>
+        <!-- APP CONTENT START -->
+        <div id="app">
+
+          <!-- App shell: top bar (tablet + desktop) and step sidebar (desktop) -->
+          <header class="appbar">
+            <span class="brand-mark" aria-hidden="true"><svg class="i"><use href="#i-plus"/></svg></span>
+            <strong class="brand" data-i18n="brand">Before your visit</strong>
+            <span class="appbar-visit" id="bar-visit" hidden><span data-i18n="bar_visit">Visit</span> <b id="bar-visit-id"></b></span>
+            <div class="lang-switch" role="group" aria-label="Language" data-i18n-aria="lang_label">
+              <button type="button" data-lang="en" lang="en" aria-pressed="true">English</button>
+              <button type="button" data-lang="zh" lang="zh-Hans" aria-pressed="false">中文</button>
+              <button type="button" data-lang="ms" lang="ms" aria-pressed="false">Melayu</button>
+              <button type="button" data-lang="ta" lang="ta" aria-pressed="false">தமிழ்</button>
+            </div>
+          </header>
+          <nav class="sidenav" aria-label="Your progress">
+            <div>
+              <p class="nav-label" data-i18n="steps_label">Your progress</p>
+              <ol class="steps">
+                <li data-step="start" aria-current="step"><span class="step-num" aria-hidden="true">1</span><span data-i18n="step1">Check in</span></li>
+                <li data-step="chat"><span class="step-num" aria-hidden="true">2</span><span data-i18n="step2">Answer the questions</span></li>
+                <li data-step="ended"><span class="step-num" aria-hidden="true">3</span><span data-i18n="step3">Finished</span></li>
+              </ol>
+            </div>
+            <div class="sidenav-help"><strong data-i18n="p4_t">Need help now?</strong><span data-i18n="p4_d">Tell the staff near you. The assistant does not replace them.</span></div>
+          </nav>
+
+          <div class="main" id="main">
+
+          <!-- Start -->
+          <section class="screen od-screen" id="start" aria-labelledby="start-title">
+            <header class="start-head">
+              <p class="eyebrow" data-i18n="eyebrow">Before your visit</p>
+              <div class="lang-switch" role="group" aria-label="Language" data-i18n-aria="lang_label">
+                <button type="button" data-lang="en" lang="en" aria-pressed="true">English</button>
+                <button type="button" data-lang="zh" lang="zh-Hans" aria-pressed="false">中文</button>
+                <button type="button" data-lang="ms" lang="ms" aria-pressed="false">Melayu</button>
+                <button type="button" data-lang="ta" lang="ta" aria-pressed="false">தமிழ்</button>
+              </div>
+            </header>
+            <div class="od-scroll start-body">
+              <h1 id="start-title" tabindex="-1" data-i18n="start_title">Answer the nurse's questions by talking</h1>
+              <p class="lead" data-i18n="lead">A voice assistant asks the questions a nurse usually asks. Speak in the language you are most comfortable with. Your nurse and doctor read everything before they see you.</p>
+
+              <div class="visit" id="visit-known" hidden>
+                <div class="od-field">
+                  <span class="small muted" data-i18n="your_visit">Your visit</span>
+                  <span class="visit-id" id="visit-id-text"></span>
+                </div>
+                <button type="button" class="btn btn-link" id="visit-change" style="margin:4px 0 -8px -8px" data-i18n="not_my_visit">This is not my visit</button>
+              </div>
+
+              <div class="visit field od-stack" id="visit-entry" hidden>
+                <label class="field-label" for="visit-input" data-i18n-html="visit_label_html">Visit ID <span class="muted">(required)</span></label>
+                <input class="text-input" id="visit-input" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="V-2026-07-17-0031" aria-describedby="visit-help visit-err" />
+                <span class="small muted" id="visit-help" data-i18n="visit_help">You can find it in the SMS from the hospital.</span>
+                <span class="field-error" id="visit-err" hidden data-i18n="visit_err">Enter the Visit ID from your SMS. It looks like V-2026-07-17-0031.</span>
+              </div>
+
+              <div class="points od-stack">
+                <div class="point od-row-top">
+                  <span class="point-icon od-fixed" aria-hidden="true"><svg class="i"><use href="#i-mic"/></svg></span>
+                  <div class="od-fill"><strong data-i18n="p1_t">Your phone asks to use the microphone</strong><span data-i18n="p1_d">Tap Allow, then talk as you would to a nurse. You can also type.</span></div>
+                </div>
+                <div class="point od-row-top">
+                  <span class="point-icon od-fixed" aria-hidden="true"><svg class="i"><use href="#i-globe"/></svg></span>
+                  <div class="od-fill"><strong data-i18n="p2_t">Any language is fine</strong><span data-i18n="p2_d">English, 中文, Bahasa Melayu, தமிழ், or another language.</span></div>
+                </div>
+                <div class="point od-row-top">
+                  <span class="point-icon od-fixed" aria-hidden="true"><svg class="i"><use href="#i-cam"/></svg></span>
+                  <div class="od-fill"><strong data-i18n="p3_t">Camera only if you want</strong><span data-i18n="p3_d">You can turn it on to show where it hurts.</span></div>
+                </div>
+                <div class="point od-row-top">
+                  <span class="point-icon od-fixed" aria-hidden="true"><svg class="i"><use href="#i-nurse"/></svg></span>
+                  <div class="od-fill"><strong data-i18n="p4_t">Need help now?</strong><span data-i18n="p4_d">Tell the staff near you. The assistant does not replace them.</span></div>
+                </div>
+              </div>
+
+              <details class="options">
+                <summary><span data-i18n="more_options">More options</span> <svg class="i i-s" aria-hidden="true"><use href="#i-down"/></svg></summary>
+                <div class="options-body od-stack">
+                  <div class="field od-stack">
+                    <label class="field-label" for="voice" data-i18n="voice_label">Assistant voice</label>
+                    <select class="select" id="voice">
+                      <option value="Puck">Puck</option>
+                      <option value="Charon">Charon</option>
+                      <option value="Kore">Kore</option>
+                      <option value="Fenrir">Fenrir</option>
+                      <option value="Aoede">Aoede</option>
+                      <option value="Leda">Leda</option>
+                      <option value="Orus">Orus</option>
+                      <option value="Zephyr">Zephyr</option>
+                    </select>
+                  </div>
+                  <label class="check"><input type="checkbox" id="restart" /><span><strong data-i18n="restart_t">Start the questions again from the beginning</strong><span data-i18n="restart_d">Use this if you already started before and want to answer everything again.</span></span></label>
+                </div>
+              </details>
+            </div>
+            <footer class="footer od-stack">
+              <p class="banner error" id="start-error" role="alert" hidden></p>
+              <p class="banner info small" id="sample-start" hidden data-i18n="sample_start">This copy is not connected to the hospital service. Start plays a sample conversation.</p>
+              <button class="btn btn-primary" id="start-btn">Start</button>
+            </footer>
+          </section>
+
+          <!-- Conversation -->
+          <section class="screen od-screen" id="chat" aria-labelledby="chat-title" hidden>
+            <header class="chat-head od-row">
+              <div class="chat-title od-field od-fill">
+                <strong id="chat-title" tabindex="-1" data-i18n="chat_title">Health questions</strong>
+                <span class="conn" id="conn"><i aria-hidden="true"></i><span id="conn-text">Connected</span></span>
+              </div>
+              <select class="lang-select od-fixed" data-lang-select aria-label="Language" data-i18n-aria="lang_label">
+                <option value="en" lang="en">English</option>
+                <option value="zh" lang="zh-Hans">中文</option>
+                <option value="ms" lang="ms">Melayu</option>
+                <option value="ta" lang="ta">தமிழ்</option>
+              </select>
+              <button class="end-btn od-fixed" id="end-btn" data-i18n="end">End</button>
+            </header>
+            <div class="od-scroll" id="scroll">
+              <p class="banner info small sample-note" id="sample-chat" hidden data-i18n="sample_chat">Sample conversation. Not connected to the hospital service.</p>
+              <div class="msgs" id="msgs" role="log" aria-live="polite" aria-label="Conversation">
+                <p class="empty" id="empty" data-i18n="empty">The assistant will greet you in a moment.</p>
+              </div>
+            </div>
+            <footer class="chat-foot od-stack">
+              <div class="panel">
+              <p class="state" id="state" aria-live="polite"><span class="levels" aria-hidden="true"><i></i><i></i><i></i></span><span id="state-text">Connecting</span></p>
+              <div class="cam" id="cam" hidden>
+                <video id="video" autoplay playsinline muted></video>
+                <p class="cam-label" id="cam-label">The assistant can see your camera</p>
+              </div>
+              <div class="panel-info">
+                <span class="small muted" data-i18n="your_visit">Your visit</span>
+                <strong id="panel-visit">—</strong>
+                <span class="small muted" data-i18n="panel_note">A nurse reads your answers before you are seen.</span>
+              </div>
+              </div>
+              <div class="controls">
+                <button type="button" class="ctl" id="cam-btn" aria-pressed="false"><span class="ctl-icon"><svg class="i" aria-hidden="true"><use href="#i-cam"/></svg></span><span id="cam-text">Camera</span></button>
+                <button type="button" class="ctl mic" id="mic-btn" aria-pressed="false"><span class="ctl-icon"><svg class="i" aria-hidden="true"><use id="mic-use" href="#i-mic-off"/></svg></span><span id="mic-text">Mic off</span></button>
+                <button type="button" class="ctl" id="keys-btn" aria-pressed="false" aria-controls="composer"><span class="ctl-icon"><svg class="i" aria-hidden="true"><use href="#i-keys"/></svg></span><span data-i18n="type">Type</span></button>
+                <button type="button" class="ctl" id="screen-btn" aria-pressed="false" hidden><span class="ctl-icon"><svg class="i" aria-hidden="true"><use href="#i-screen"/></svg></span><span data-i18n="screen">Screen</span></button>
+              </div>
+              <form class="composer od-row" id="composer" hidden>
+                <button type="button" class="composer-mic" id="composer-mic" aria-pressed="false" aria-label="Turn microphone on"><svg class="i" aria-hidden="true"><use href="#i-mic-off"/></svg></button>
+                <textarea id="input" class="od-fill" rows="1" enterkeyhint="send" placeholder="Type your answer" aria-label="Type your answer" data-i18n-ph="type_ph" data-i18n-aria="type_ph"></textarea>
+                <button type="submit" class="send" id="send" aria-label="Send" data-i18n-aria="send" disabled><svg class="i"><use href="#i-send"/></svg></button>
+                <p class="kbd-hint" data-i18n-html="kbd_html"><kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line · <kbd>Ctrl</kbd>+<kbd>M</kbd> turns the mic on or off</p>
+              </form>
+            </footer>
+          </section>
+
+          <!-- Ended -->
+          <section class="screen od-screen" id="ended" aria-labelledby="ended-title" hidden>
+            <span></span>
+            <div class="od-scroll ended-body">
+              <div class="ended-icon" id="ended-icon" aria-hidden="true"><svg class="i"><use id="ended-use" href="#i-check"/></svg></div>
+              <h2 id="ended-title" tabindex="-1">Conversation ended</h2>
+              <p id="ended-text">If you stopped before the end, you can continue where you left off.</p>
+            </div>
+            <footer class="footer od-stack">
+              <p class="banner error" id="ended-error" role="alert" hidden></p>
+              <button class="btn btn-primary" id="resume-btn">Continue where I stopped</button>
+              <button class="btn btn-secondary" id="new-btn" data-i18n="new">Start a new session</button>
+            </footer>
+          </section>
+
+          </div><!-- /main -->
+        </div>
+        <!-- APP CONTENT END -->
+      </main>
+
+      <!-- End confirmation -->
+      <div class="overlay" id="confirm" hidden>
+        <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-text">
+          <h2 id="confirm-title" tabindex="-1" data-i18n="confirm_title">End the conversation?</h2>
+          <p id="confirm-text" data-i18n="confirm_text">You can continue later from the same link.</p>
+          <div class="actions od-stack">
+            <button class="btn btn-danger" id="confirm-end" data-i18n="confirm_end">End conversation</button>
+            <button class="btn btn-secondary" id="confirm-keep" data-i18n="confirm_keep">Keep talking</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="status-bar" aria-hidden="true">
+        <span class="status-time">9:41</span>
+        <span class="status-cutout-zone"></span>
+        <span class="status-icons">
+          <svg class="connectivity" viewBox="0 0 15 12"><path d="M1.5 10.5v-2m4 2v-4.5m4 4.5v-7m4 7v-9"/></svg>
+          <svg class="wifi" viewBox="0 0 16 12"><path d="M1.5 4.7a9.2 9.2 0 0 1 13 0M4.2 7.3a5.4 5.4 0 0 1 7.6 0M6.9 10a1.55 1.55 0 0 1 2.2 0"/></svg>
+          <svg class="battery" viewBox="0 0 20 11"><rect x=".75" y="1.25" width="16.5" height="8.5" rx="2"/><path d="M18.5 4v3M3.2 3.4h10.4v4.2H3.2z" fill="currentColor" stroke="none"/></svg>
+        </span>
+      </div>
+      <div class="camera-dot" aria-hidden="true"></div>
+      <div class="gesture-indicator" aria-hidden="true"></div>
+    </section>
+  </div>
+
+  <!-- Backend client scripts, served by main.py from frontend/ -->
+  <script src="/static/media-handler.js"></script>
+  <script src="/static/gemini-client.js"></script>
+  <script>
+    const $ = (s) => document.querySelector(s);
+
+    /* ---------- interface language ---------- */
+    // English text for marked-up elements comes from the HTML itself (captured in applyLang).
+    // Only text the script sets needs an English entry here.
+    const STR = {
+      en: {
+        start: "Start", resume: "Continue where I stopped", connecting: "Connecting",
+        err_audio: "Sound could not start on this phone. Close other apps that use sound, then try again.",
+        err_connect: "We could not connect. Check your internet connection, then try again.",
+        err_server: "Something went wrong on our side. Please say that again, or tell the staff near you.",
+        who_you: "You", who_bot: "Assistant", thinking: "Noting this down", connected: "Connected", sample: "Sample",
+        st_blocked: "Microphone is blocked. Type your answers below.",
+        st_speaking: "Assistant is speaking. You can interrupt.",
+        st_listening: "Listening. Speak when you are ready.",
+        st_off: "Microphone is off. Tap the mic to talk.",
+        mic_turn_off: "Turn microphone off", mic_turn_on: "Turn microphone on", mic_on: "Mic on", mic_off: "Mic off",
+        cam_on: "Camera on", cam: "Camera",
+        sees_screen: "The assistant can see your screen", sees_cam: "The assistant can see your camera",
+        err_cam: "The camera is blocked or not available. You can allow it in your browser settings. It is optional.",
+        err_offline: "You are not connected. Your message was not sent.",
+        lost_t: "The connection was lost", ended_t: "Conversation ended",
+        lost_d: "Your answers so far are kept. Check your internet connection, then continue where you stopped.",
+        ended_d: "If you stopped before the assistant finished, you can continue where you left off.",
+      },
+      zh: {
+        brand: "就诊前", eyebrow: "就诊前", bar_visit: "就诊", lang_label: "语言",
+        steps_label: "您的进度", step1: "登记", step2: "回答问题", step3: "完成",
+        start_title: "用说话的方式回答护士的问题",
+        lead: "语音助手会问您护士通常会问的问题。请用您最习惯的语言说话。护士和医生会在见您之前阅读所有内容。",
+        your_visit: "您的就诊", not_my_visit: "这不是我的就诊",
+        visit_label_html: '就诊编号 <span class="muted">（必填）</span>',
+        visit_help: "您可以在医院发送的短信中找到。",
+        visit_err: "请输入短信中的就诊编号，格式如 V-2026-07-17-0031。",
+        p1_t: "手机会请求使用麦克风", p1_d: "点击“允许”，然后像跟护士说话一样说。您也可以打字。",
+        p2_t: "任何语言都可以", p2_d: "English、中文、Bahasa Melayu、தமிழ் 或其他语言。",
+        p3_t: "摄像头可选", p3_d: "您可以打开摄像头，展示哪里疼痛。",
+        p4_t: "现在需要帮助？", p4_d: "请告诉您身边的工作人员。助手不能代替他们。",
+        more_options: "更多选项", voice_label: "助手声音",
+        restart_t: "从头开始重新回答问题", restart_d: "如果您之前已开始，想重新回答所有问题，请选择此项。",
+        sample_start: "此版本未连接医院服务。点击“开始”将播放示例对话。",
+        chat_title: "健康问题", end: "结束", sample_chat: "示例对话。未连接医院服务。",
+        empty: "助手马上会向您问好。", panel_note: "在您就诊前，护士会阅读您的回答。",
+        type: "打字", screen: "屏幕", type_ph: "输入您的回答", send: "发送",
+        kbd_html: "<kbd>Enter</kbd> 发送 · <kbd>Shift</kbd>+<kbd>Enter</kbd> 换行 · <kbd>Ctrl</kbd>+<kbd>M</kbd> 开关麦克风",
+        new: "开始新的对话", confirm_title: "结束对话？", confirm_text: "您可以稍后通过同一链接继续。",
+        confirm_end: "结束对话", confirm_keep: "继续说话",
+        start: "开始", resume: "从上次停下的地方继续", connecting: "正在连接",
+        err_audio: "这部手机无法启动声音。请关闭其他使用声音的应用，然后重试。",
+        err_connect: "无法连接。请检查网络连接，然后重试。",
+        err_server: "我们这边出了问题。请再说一遍，或告诉您身边的工作人员。",
+        who_you: "您", who_bot: "助手", thinking: "正在记录", connected: "已连接", sample: "示例",
+        st_blocked: "麦克风被阻止。请在下方输入您的回答。",
+        st_speaking: "助手正在说话。您可以打断。",
+        st_listening: "正在聆听。准备好就可以说。",
+        st_off: "麦克风已关闭。点击麦克风开始说话。",
+        mic_turn_off: "关闭麦克风", mic_turn_on: "打开麦克风", mic_on: "麦克风开", mic_off: "麦克风关",
+        cam_on: "摄像头开", cam: "摄像头",
+        sees_screen: "助手可以看到您的屏幕", sees_cam: "助手可以看到您的摄像头画面",
+        err_cam: "摄像头被阻止或不可用。您可以在浏览器设置中允许。摄像头是可选的。",
+        err_offline: "您未连接。您的消息没有发送。",
+        lost_t: "连接已中断", ended_t: "对话已结束",
+        lost_d: "您到目前为止的回答已保存。请检查网络连接，然后从上次停下的地方继续。",
+        ended_d: "如果您在助手完成之前就停止了，可以从上次停下的地方继续。",
+      },
+      ms: {
+        brand: "Sebelum lawatan anda", eyebrow: "Sebelum lawatan anda", bar_visit: "Lawatan", lang_label: "Bahasa",
+        steps_label: "Kemajuan anda", step1: "Daftar masuk", step2: "Jawab soalan", step3: "Selesai",
+        start_title: "Jawab soalan jururawat dengan bercakap",
+        lead: "Pembantu suara bertanya soalan yang biasanya ditanya oleh jururawat. Bercakaplah dalam bahasa yang paling selesa bagi anda. Jururawat dan doktor anda membaca semuanya sebelum berjumpa anda.",
+        your_visit: "Lawatan anda", not_my_visit: "Ini bukan lawatan saya",
+        visit_label_html: 'ID Lawatan <span class="muted">(wajib)</span>',
+        visit_help: "Anda boleh menemuinya dalam SMS daripada hospital.",
+        visit_err: "Masukkan ID Lawatan daripada SMS anda. Contohnya V-2026-07-17-0031.",
+        p1_t: "Telefon anda akan meminta kebenaran untuk menggunakan mikrofon", p1_d: "Ketik Benarkan, kemudian bercakap seperti dengan jururawat. Anda juga boleh menaip.",
+        p2_t: "Mana-mana bahasa boleh", p2_d: "English, 中文, Bahasa Melayu, தமிழ், atau bahasa lain.",
+        p3_t: "Kamera hanya jika anda mahu", p3_d: "Anda boleh menghidupkannya untuk menunjukkan tempat yang sakit.",
+        p4_t: "Perlukan bantuan sekarang?", p4_d: "Beritahu kakitangan berdekatan anda. Pembantu ini tidak menggantikan mereka.",
+        more_options: "Pilihan lain", voice_label: "Suara pembantu",
+        restart_t: "Mulakan soalan semula dari awal", restart_d: "Gunakan ini jika anda sudah bermula sebelum ini dan mahu menjawab semuanya semula.",
+        sample_start: "Salinan ini tidak disambungkan ke perkhidmatan hospital. Mula akan memainkan contoh perbualan.",
+        chat_title: "Soalan kesihatan", end: "Tamat", sample_chat: "Contoh perbualan. Tidak disambungkan ke perkhidmatan hospital.",
+        empty: "Pembantu akan menyapa anda sebentar lagi.", panel_note: "Jururawat membaca jawapan anda sebelum anda diperiksa.",
+        type: "Taip", screen: "Skrin", type_ph: "Taip jawapan anda", send: "Hantar",
+        kbd_html: "<kbd>Enter</kbd> untuk hantar · <kbd>Shift</kbd>+<kbd>Enter</kbd> untuk baris baharu · <kbd>Ctrl</kbd>+<kbd>M</kbd> hidupkan atau matikan mikrofon",
+        new: "Mulakan sesi baharu", confirm_title: "Tamatkan perbualan?", confirm_text: "Anda boleh sambung kemudian melalui pautan yang sama.",
+        confirm_end: "Tamatkan perbualan", confirm_keep: "Terus bercakap",
+        start: "Mula", resume: "Sambung dari tempat saya berhenti", connecting: "Menyambung",
+        err_audio: "Bunyi tidak dapat dimulakan pada telefon ini. Tutup aplikasi lain yang menggunakan bunyi, kemudian cuba lagi.",
+        err_connect: "Kami tidak dapat menyambung. Periksa sambungan internet anda, kemudian cuba lagi.",
+        err_server: "Ada masalah di pihak kami. Sila ulang semula, atau beritahu kakitangan berdekatan anda.",
+        who_you: "Anda", who_bot: "Pembantu", thinking: "Sedang mencatat", connected: "Disambungkan", sample: "Contoh",
+        st_blocked: "Mikrofon disekat. Taip jawapan anda di bawah.",
+        st_speaking: "Pembantu sedang bercakap. Anda boleh mencelah.",
+        st_listening: "Sedang mendengar. Bercakaplah apabila anda sedia.",
+        st_off: "Mikrofon dimatikan. Ketik mikrofon untuk bercakap.",
+        mic_turn_off: "Matikan mikrofon", mic_turn_on: "Hidupkan mikrofon", mic_on: "Mikrofon hidup", mic_off: "Mikrofon mati",
+        cam_on: "Kamera hidup", cam: "Kamera",
+        sees_screen: "Pembantu boleh melihat skrin anda", sees_cam: "Pembantu boleh melihat kamera anda",
+        err_cam: "Kamera disekat atau tidak tersedia. Anda boleh membenarkannya dalam tetapan pelayar. Kamera adalah pilihan.",
+        err_offline: "Anda tidak disambungkan. Mesej anda tidak dihantar.",
+        lost_t: "Sambungan terputus", ended_t: "Perbualan tamat",
+        lost_d: "Jawapan anda setakat ini disimpan. Periksa sambungan internet anda, kemudian sambung dari tempat anda berhenti.",
+        ended_d: "Jika anda berhenti sebelum pembantu selesai, anda boleh sambung dari tempat anda berhenti.",
+      },
+      ta: {
+        brand: "உங்கள் வருகைக்கு முன்", eyebrow: "உங்கள் வருகைக்கு முன்", bar_visit: "வருகை", lang_label: "மொழி",
+        steps_label: "உங்கள் முன்னேற்றம்", step1: "பதிவு", step2: "கேள்விகளுக்குப் பதிலளிக்கவும்", step3: "முடிந்தது",
+        start_title: "பேசி செவிலியரின் கேள்விகளுக்குப் பதிலளிக்கவும்",
+        lead: "செவிலியர் வழக்கமாகக் கேட்கும் கேள்விகளை ஒரு குரல் உதவியாளர் கேட்கும். உங்களுக்கு மிகவும் வசதியான மொழியில் பேசுங்கள். உங்களைப் பார்ப்பதற்கு முன் உங்கள் செவிலியரும் மருத்துவரும் அனைத்தையும் படிப்பார்கள்.",
+        your_visit: "உங்கள் வருகை", not_my_visit: "இது என் வருகை அல்ல",
+        visit_label_html: 'வருகை எண் <span class="muted">(கட்டாயம்)</span>',
+        visit_help: "மருத்துவமனை அனுப்பிய SMS-இல் இதைக் காணலாம்.",
+        visit_err: "உங்கள் SMS-இல் உள்ள வருகை எண்ணை உள்ளிடவும். எடுத்துக்காட்டு: V-2026-07-17-0031.",
+        p1_t: "உங்கள் தொலைபேசி மைக்ரோஃபோனைப் பயன்படுத்த அனுமதி கேட்கும்", p1_d: "அனுமதி என்பதைத் தட்டி, செவிலியரிடம் பேசுவது போல் பேசுங்கள். நீங்கள் தட்டச்சும் செய்யலாம்.",
+        p2_t: "எந்த மொழியும் சரி", p2_d: "English, 中文, Bahasa Melayu, தமிழ் அல்லது வேறு மொழி.",
+        p3_t: "விரும்பினால் மட்டும் கேமரா", p3_d: "வலிக்கும் இடத்தைக் காட்ட அதை இயக்கலாம்.",
+        p4_t: "இப்போதே உதவி வேண்டுமா?", p4_d: "அருகிலுள்ள ஊழியர்களிடம் சொல்லுங்கள். உதவியாளர் அவர்களுக்கு மாற்று அல்ல.",
+        more_options: "மேலும் விருப்பங்கள்", voice_label: "உதவியாளர் குரல்",
+        restart_t: "கேள்விகளை மீண்டும் தொடக்கத்திலிருந்து தொடங்கவும்", restart_d: "முன்பே தொடங்கி, எல்லாவற்றுக்கும் மீண்டும் பதிலளிக்க விரும்பினால் இதைப் பயன்படுத்தவும்.",
+        sample_start: "இந்தப் பதிப்பு மருத்துவமனைச் சேவையுடன் இணைக்கப்படவில்லை. தொடங்கு என்பது ஒரு மாதிரி உரையாடலை இயக்கும்.",
+        chat_title: "உடல்நலக் கேள்விகள்", end: "முடி", sample_chat: "மாதிரி உரையாடல். மருத்துவமனைச் சேவையுடன் இணைக்கப்படவில்லை.",
+        empty: "உதவியாளர் சிறிது நேரத்தில் உங்களை வரவேற்கும்.", panel_note: "நீங்கள் பார்க்கப்படுவதற்கு முன் ஒரு செவிலியர் உங்கள் பதில்களைப் படிப்பார்.",
+        type: "தட்டச்சு", screen: "திரை", type_ph: "உங்கள் பதிலைத் தட்டச்சு செய்யவும்", send: "அனுப்பு",
+        kbd_html: "<kbd>Enter</kbd> அனுப்ப · <kbd>Shift</kbd>+<kbd>Enter</kbd> புதிய வரி · <kbd>Ctrl</kbd>+<kbd>M</kbd> மைக்கை இயக்க/அணைக்க",
+        new: "புதிய அமர்வைத் தொடங்கு", confirm_title: "உரையாடலை முடிக்கவா?", confirm_text: "அதே இணைப்பிலிருந்து பின்னர் தொடரலாம்.",
+        confirm_end: "உரையாடலை முடி", confirm_keep: "தொடர்ந்து பேசு",
+        start: "தொடங்கு", resume: "நிறுத்திய இடத்திலிருந்து தொடரவும்", connecting: "இணைக்கிறது",
+        err_audio: "இந்தத் தொலைபேசியில் ஒலியைத் தொடங்க முடியவில்லை. ஒலியைப் பயன்படுத்தும் பிற செயலிகளை மூடிவிட்டு மீண்டும் முயலவும்.",
+        err_connect: "இணைக்க முடியவில்லை. உங்கள் இணைய இணைப்பைச் சரிபார்த்து மீண்டும் முயலவும்.",
+        err_server: "எங்கள் பக்கம் ஏதோ தவறு நடந்தது. தயவுசெய்து மீண்டும் சொல்லுங்கள், அல்லது அருகிலுள்ள ஊழியர்களிடம் சொல்லுங்கள்.",
+        who_you: "நீங்கள்", who_bot: "உதவியாளர்", thinking: "குறித்துக்கொள்கிறது", connected: "இணைக்கப்பட்டது", sample: "மாதிரி",
+        st_blocked: "மைக்ரோஃபோன் தடுக்கப்பட்டுள்ளது. உங்கள் பதில்களைக் கீழே தட்டச்சு செய்யவும்.",
+        st_speaking: "உதவியாளர் பேசுகிறது. நீங்கள் இடைமறிக்கலாம்.",
+        st_listening: "கேட்கிறது. தயாரானதும் பேசுங்கள்.",
+        st_off: "மைக்ரோஃபோன் அணைக்கப்பட்டுள்ளது. பேச மைக்கைத் தட்டவும்.",
+        mic_turn_off: "மைக்ரோஃபோனை அணை", mic_turn_on: "மைக்ரோஃபோனை இயக்கு", mic_on: "மைக் இயக்கத்தில்", mic_off: "மைக் அணைப்பில்",
+        cam_on: "கேமரா இயக்கத்தில்", cam: "கேமரா",
+        sees_screen: "உதவியாளர் உங்கள் திரையைப் பார்க்க முடியும்", sees_cam: "உதவியாளர் உங்கள் கேமராவைப் பார்க்க முடியும்",
+        err_cam: "கேமரா தடுக்கப்பட்டுள்ளது அல்லது கிடைக்கவில்லை. உலாவி அமைப்புகளில் அனுமதிக்கலாம். இது கட்டாயமல்ல.",
+        err_offline: "நீங்கள் இணைக்கப்படவில்லை. உங்கள் செய்தி அனுப்பப்படவில்லை.",
+        lost_t: "இணைப்பு துண்டிக்கப்பட்டது", ended_t: "உரையாடல் முடிந்தது",
+        lost_d: "இதுவரை உங்கள் பதில்கள் சேமிக்கப்பட்டுள்ளன. இணைய இணைப்பைச் சரிபார்த்து, நிறுத்திய இடத்திலிருந்து தொடரவும்.",
+        ended_d: "உதவியாளர் முடிப்பதற்கு முன் நிறுத்தியிருந்தால், நிறுத்திய இடத்திலிருந்து தொடரலாம்.",
+      },
+    };
+    const HTML_LANG = { en: "en", zh: "zh-Hans", ms: "ms", ta: "ta" };
+    let lang = new URLSearchParams(location.search).get("lang") || localStorage.getItem("lang") || "en";
+    if (!STR[lang]) lang = "en";
+    const t = (k) => STR[lang][k] ?? STR.en[k] ?? k;
+    // Icons: copy each <symbol> into its own <svg> with outline attributes. <use> sprites render
+    // as clipped black fills in some WebViews, which lose the inherited fill/stroke and the viewBox.
+    function setIcon(svg, id) {
+      const sym = document.getElementById(id);
+      svg.setAttribute("viewBox", sym.getAttribute("viewBox"));
+      svg.setAttribute("width", "24");
+      svg.setAttribute("height", "24");
+      svg.setAttribute("fill", "none");
+      svg.setAttribute("stroke", "currentColor");
+      svg.setAttribute("stroke-linecap", "round");
+      svg.setAttribute("stroke-linejoin", "round");
+      svg.innerHTML = sym.innerHTML;
+    }
+    function hydrateIcons(root) {
+      root.querySelectorAll("svg.i").forEach((s) => {
+        const u = s.querySelector("use");
+        if (u) setIcon(s, u.getAttribute("href").slice(1));
+      });
+    }
+    hydrateIcons(document);
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // Real backend when its client scripts loaded; otherwise a labelled sample conversation.
+    const LIVE = typeof GeminiClient !== "undefined" && typeof MediaHandler !== "undefined";
+    const VISIT_RE = /^[A-Za-z0-9][A-Za-z0-9-]{3,}$/;
+
+    const params = new URLSearchParams(location.search);
+    let visitId = (params.get("visit") || "").trim();
+    const voiceParam = params.get("voice");
+    if (voiceParam && [...$("#voice").options].some((o) => o.value === voiceParam)) $("#voice").value = voiceParam;
+
+    const state = {
+      screen: "start", resuming: false, endedByUser: false, opened: false,
+      micOn: false, micBlocked: false, video: null, // null | "camera" | "screen"
+      thinking: false, sampleSpeaking: false,
+    };
+    let geminiDiv = null, userDiv = null, thinkTimer = null;
+
+    /* ---------- screens ---------- */
+    function go(id) {
+      state.screen = id;
+      document.querySelectorAll(".screen").forEach((s) => (s.hidden = s.id !== id));
+      // desktop step sidebar: earlier steps done, current step marked
+      const order = ["start", "chat", "ended"], cur = order.indexOf(id);
+      document.querySelectorAll(".steps li").forEach((li) => {
+        const i = order.indexOf(li.dataset.step);
+        li.classList.toggle("done", i < cur);
+        if (i === cur) li.setAttribute("aria-current", "step"); else li.removeAttribute("aria-current");
+      });
+      const head = $("#" + id).querySelector("[tabindex='-1']");
+      head && head.focus({ preventScroll: true });
+    }
+
+    /* ---------- start ---------- */
+    function syncVisit() {
+      $("#bar-visit").hidden = !visitId;
+      $("#bar-visit-id").textContent = visitId;
+      $("#panel-visit").textContent = visitId || "—";
+    }
+    function renderVisit() {
+      syncVisit();
+      $("#visit-known").hidden = !visitId;
+      $("#visit-entry").hidden = !!visitId;
+      $("#visit-id-text").textContent = visitId;
+    }
+    renderVisit();
+    $("#sample-start").hidden = LIVE;
+    $("#visit-change").addEventListener("click", () => {
+      $("#visit-input").value = visitId;
+      visitId = "";
+      renderVisit();
+      $("#visit-input").focus();
+    });
+    function checkVisit() {
+      const v = $("#visit-input").value.trim(), ok = VISIT_RE.test(v);
+      $("#visit-input").setAttribute("aria-invalid", String(!ok));
+      $("#visit-err").hidden = ok;
+      return ok ? v : "";
+    }
+    $("#visit-input").addEventListener("blur", () => { if ($("#visit-input").value) checkVisit(); });
+    $("#visit-input").addEventListener("keydown", (e) => { if (e.key === "Enter") start(); });
+
+    function setStartBusy(busy, label) {
+      [$("#start-btn"), $("#resume-btn"), $("#new-btn")].forEach((b) => (b.disabled = busy));
+      const b = state.resuming ? $("#resume-btn") : $("#start-btn");
+      b.innerHTML = busy ? `<span class="spinner" aria-hidden="true"></span> ${label}` : t(state.resuming ? "resume" : "start");
+    }
+    function showError(where, msg) {
+      const el = $(where === "ended" ? "#ended-error" : "#start-error");
+      el.textContent = msg;
+      el.hidden = !msg;
+    }
+
+    $("#start-btn").addEventListener("click", () => start());
+    $("#resume-btn").addEventListener("click", () => start({ resume: true }));
+    $("#new-btn").addEventListener("click", () => {
+      clearLog();
+      showError("ended", "");
+      go("start");
+    });
+
+    async function start({ resume = false } = {}) {
+      if (!resume && !visitId) {
+        const v = checkVisit();
+        if (!v) { $("#visit-input").focus(); return; }
+        visitId = v;
+        syncVisit();
+      }
+      state.resuming = resume;
+      state.endedByUser = false;
+      state.opened = false;
+      showError(resume ? "ended" : "start", "");
+      setStartBusy(true, t("connecting"));
+      if (!LIVE) return runSample();
+      try {
+        await media.initializeAudio(); // must run inside the tap
+        client.connect($("#voice").value, resume);
+      } catch (e) {
+        console.error(e);
+        setStartBusy(false);
+        showError(resume ? "ended" : "start", t("err_audio"));
+      }
+    }
+
+    /* ---------- backend ---------- */
+    const media = LIVE ? new MediaHandler() : null;
+    const client = LIVE ? new GeminiClient({
+      onOpen: () => {
+        state.opened = true;
+        setStartBusy(false);
+        enterChat();
+        if (!state.resuming) {
+          const restart = $("#restart").checked;
+          client.sendText(`${restart ? "Restart Session" : "Start Session"}: ${visitId}`);
+          $("#restart").checked = false;
+          showThinking();
+        }
+        startMic();
+      },
+      onMessage: (event) => {
+        if (typeof event.data === "string") {
+          try { handleEvent(JSON.parse(event.data)); } catch (e) { console.error("Parse error:", e); }
+        } else {
+          media.playAudio(event.data);
+        }
+      },
+      onClose: () => {
+        stopMedia();
+        setStartBusy(false);
+        if (!state.opened) {
+          showError(state.resuming ? "ended" : "start", t("err_connect"));
+          return;
+        }
+        showEnded(!state.endedByUser);
+      },
+      onError: (e) => console.error("WS error:", e), // onClose follows and shows the message
+    }) : null;
+
+    function handleEvent(msg) {
+      if (msg.type === "interrupted") {
+        media && media.stopAudioPlayback();
+        geminiDiv = userDiv = null;
+        hideThinking();
+      } else if (msg.type === "turn_complete") {
+        geminiDiv = userDiv = null;
+        hideThinking();
+      } else if (msg.type === "user") {
+        userDiv = appendDelta(userDiv, "user", msg.text);
+        // Patient paused and no reply yet: the intake agent is working (it can take many seconds).
+        clearTimeout(thinkTimer);
+        thinkTimer = setTimeout(() => { if (!geminiDiv) showThinking(); }, 1200);
+      } else if (msg.type === "gemini") {
+        hideThinking();
+        geminiDiv = appendDelta(geminiDiv, "gemini", msg.text);
+      } else if (msg.type === "error") {
+        hideThinking();
+        addNote(t("err_server"));
+      }
+      renderState();
+    }
+
+    /* ---------- conversation log ---------- */
+    const msgs = $("#msgs"), scroll = $("#scroll");
+    const nearBottom = () => scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 120;
+    function toBottom(force) { if (force || nearBottom()) scroll.scrollTo({ top: scroll.scrollHeight, behavior: reduced ? "auto" : "smooth" }); }
+    function newBubble(type, text) {
+      $("#empty").hidden = true;
+      const d = document.createElement("div");
+      d.className = "msg " + type;
+      if (type === "user" || type === "gemini") {
+        d.dataset.who = t(type === "user" ? "who_you" : "who_bot");
+        d.dataset.time = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      }
+      d.textContent = text;
+      const think = msgs.querySelector(".thinking");
+      msgs.insertBefore(d, type === "user" && think ? think : null);
+      toBottom(true);
+      return d;
+    }
+    function appendDelta(div, type, text) {
+      if (!div) return newBubble(type, text);
+      const stick = nearBottom();
+      div.textContent += text;
+      if (stick) toBottom(true);
+      return div;
+    }
+    function addNote(text) {
+      const d = newBubble("note", "");
+      d.innerHTML = '<svg class="i i-s" aria-hidden="true"><use href="#i-alert"/></svg>';
+      hydrateIcons(d);
+      d.append(Object.assign(document.createElement("span"), { textContent: text }));
+    }
+    function showThinking() {
+      if (state.thinking) return;
+      state.thinking = true;
+      const d = document.createElement("div");
+      d.className = "msg gemini thinking";
+      d.innerHTML = '<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span></span>';
+      d.lastChild.textContent = t("thinking");
+      msgs.appendChild(d);
+      $("#empty").hidden = true;
+      toBottom(true);
+      renderState();
+    }
+    function hideThinking() {
+      clearTimeout(thinkTimer);
+      state.thinking = false;
+      const t = msgs.querySelector(".thinking");
+      t && t.remove();
+    }
+    function clearLog() {
+      hideThinking();
+      msgs.querySelectorAll(".msg").forEach((m) => m.remove());
+      $("#empty").hidden = false;
+      geminiDiv = userDiv = null;
+    }
+
+    function enterChat() {
+      $("#sample-chat").hidden = LIVE;
+      $("#conn").classList.remove("off");
+      $("#conn-text").textContent = t(LIVE ? "connected" : "sample");
+      $("#screen-btn").hidden = !(LIVE && navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia && matchMedia("(pointer: fine)").matches);
+      go("chat");
+      // Desktop with a keyboard: show the text box from the start; touch devices keep voice first.
+      if (matchMedia("(min-width: 1024px) and (pointer: fine)").matches) openComposer(false);
+      renderState();
+    }
+
+    /* ---------- status line ---------- */
+    function speaking() { return LIVE ? media.scheduledSources.length > 0 : state.sampleSpeaking; }
+    function renderState() {
+      const el = $("#state"), txt = $("#state-text");
+      let cls = "", key;
+      if (state.micBlocked) { cls = "warn"; key = "st_blocked"; }
+      else if (speaking()) { cls = "speaking"; key = "st_speaking"; }
+      else if (state.thinking) { key = "thinking"; }
+      else if (state.micOn) { cls = "listening"; key = "st_listening"; }
+      else { key = "st_off"; }
+      el.className = "state " + cls;
+      if (txt.textContent !== t(key)) txt.textContent = t(key);
+      $("#state .levels").hidden = !(cls === "speaking" || cls === "listening");
+      const mic = $("#mic-btn");
+      mic.setAttribute("aria-pressed", String(state.micOn));
+      mic.classList.toggle("live", state.micOn && cls === "listening");
+      mic.setAttribute("aria-label", t(state.micOn ? "mic_turn_off" : "mic_turn_on"));
+      const micIcon = state.micOn ? "i-mic" : "i-mic-off";
+      if (mic.dataset.icon !== micIcon) { setIcon(mic.querySelector("svg.i"), micIcon); mic.dataset.icon = micIcon; }
+      const cmic = $("#composer-mic");
+      cmic.setAttribute("aria-pressed", String(state.micOn));
+      cmic.setAttribute("aria-label", mic.getAttribute("aria-label"));
+      if (cmic.dataset.icon !== micIcon) { setIcon(cmic.querySelector("svg.i"), micIcon); cmic.dataset.icon = micIcon; }
+      $("#mic-text").textContent = t(state.micOn ? "mic_on" : "mic_off");
+    }
+    setInterval(() => { if (state.screen === "chat") renderState(); }, 250);
+
+    /* ---------- mic ---------- */
+    async function startMic() {
+      if (!LIVE) { state.micOn = true; return renderState(); }
+      try {
+        await media.startAudio((data) => { if (client.isConnected()) client.send(data); });
+        state.micOn = true;
+        state.micBlocked = false;
+      } catch (e) {
+        state.micOn = false;
+        state.micBlocked = true;
+        openComposer(false);
+      }
+      renderState();
+    }
+    function stopMic() {
+      if (LIVE) media.stopAudio();
+      state.micOn = false;
+      renderState();
+    }
+    $("#mic-btn").addEventListener("click", () => (state.micOn ? stopMic() : startMic()));
+
+    /* ---------- camera / screen ---------- */
+    const video = $("#video");
+    function stopVideo() {
+      if (LIVE) media.stopVideo(video);
+      else if (video.srcObject) { video.srcObject.getTracks().forEach((t) => t.stop()); video.srcObject = null; }
+      state.video = null;
+      renderVideo();
+    }
+    function renderVideo() {
+      $("#cam").hidden = !state.video;
+      $("#cam-btn").setAttribute("aria-pressed", String(state.video === "camera"));
+      $("#screen-btn").setAttribute("aria-pressed", String(state.video === "screen"));
+      $("#cam-text").textContent = t(state.video === "camera" ? "cam_on" : "cam");
+      $("#cam-label").textContent = t(state.video === "screen" ? "sees_screen" : "sees_cam");
+    }
+    const sendFrame = (b64) => { if (client.isConnected()) client.sendImage(b64); };
+    $("#cam-btn").addEventListener("click", async () => {
+      if (state.video === "camera") return stopVideo();
+      if (state.video) stopVideo();
+      try {
+        if (LIVE) await media.startVideo(video, sendFrame);
+        else video.srcObject = await navigator.mediaDevices.getUserMedia({ video: true });
+        state.video = "camera";
+      } catch (e) {
+        addNote(t("err_cam"));
+      }
+      renderVideo();
+    });
+    $("#screen-btn").addEventListener("click", async () => {
+      if (state.video === "screen") return stopVideo();
+      if (state.video) stopVideo();
+      try {
+        await media.startScreen(video, sendFrame, () => { state.video = null; renderVideo(); });
+        state.video = "screen";
+      } catch (e) { /* user cancelled the share prompt */ }
+      renderVideo();
+    });
+
+    /* ---------- typing ---------- */
+    const input = $("#input"), send = $("#send");
+    function openComposer(focus = true) {
+      $("#composer").hidden = false;
+      $("#keys-btn").setAttribute("aria-pressed", "true");
+      if (focus) input.focus();
+    }
+    $("#keys-btn").addEventListener("click", () => {
+      if ($("#composer").hidden) return openComposer();
+      $("#composer").hidden = true;
+      $("#keys-btn").setAttribute("aria-pressed", "false");
+    });
+    input.addEventListener("input", () => {
+      send.disabled = !input.value.trim();
+      input.style.height = "auto";
+      input.style.height = Math.min(input.scrollHeight, 120) + "px";
+    });
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendTyped(); } });
+    $("#composer").addEventListener("submit", (e) => { e.preventDefault(); sendTyped(); });
+    function sendTyped() {
+      const text = input.value.trim();
+      if (!text) return;
+      if (LIVE) {
+        if (!client.isConnected()) return addNote(t("err_offline"));
+        client.sendText(text);
+      }
+      userDiv = null;
+      newBubble("user", text);
+      input.value = "";
+      input.style.height = "";
+      send.disabled = true;
+      showThinking();
+      if (!LIVE) sampleReply();
+    }
+
+    /* ---------- end / ended ---------- */
+    function stopMedia() {
+      if (!LIVE) { state.micOn = false; return stopVideo(); }
+      media.stopAudio();
+      media.stopAudioPlayback();
+      stopVideo();
+      state.micOn = false;
+    }
+    let lastFocus = null;
+    $("#end-btn").addEventListener("click", () => {
+      lastFocus = document.activeElement;
+      $("#confirm").hidden = false;
+      $("#confirm-title").focus();
+    });
+    function closeConfirm() { $("#confirm").hidden = true; lastFocus && lastFocus.focus(); }
+    $("#confirm-keep").addEventListener("click", closeConfirm);
+    $("#confirm-end").addEventListener("click", () => {
+      $("#confirm").hidden = true;
+      state.endedByUser = true;
+      if (LIVE) client.disconnect(); // onClose shows the ended screen
+      else { sampleRun++; stopMedia(); showEnded(false); }
+    });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#confirm").hidden) closeConfirm(); });
+    // desktop: mic button inside the docked composer, and Ctrl/Cmd+M to toggle the mic
+    $("#composer-mic").addEventListener("click", () => $("#mic-btn").click());
+    document.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "m" && state.screen === "chat") { e.preventDefault(); $("#mic-btn").click(); }
+    });
+
+    function showEnded(lost) {
+      hideThinking();
+      $("#ended-icon").classList.toggle("lost", lost);
+      setIcon($("#ended-icon svg"), lost ? "i-wifi-off" : "i-check");
+      state.lost = lost;
+      renderEnded();
+      go("ended");
+    }
+    function renderEnded() {
+      $("#ended-title").textContent = t(state.lost ? "lost_t" : "ended_t");
+      $("#ended-text").textContent = t(state.lost ? "lost_d" : "ended_d");
+      if (!$("#resume-btn").disabled) $("#resume-btn").textContent = t("resume");
+    }
+
+    /* ---------- sample conversation (only when the backend scripts are absent) ---------- */
+    let sampleRun = 0;
+    const wait = (ms) => new Promise((r) => setTimeout(r, reduced ? Math.min(ms, 200) : ms));
+    async function stream(type, text, run) {
+      let div = null;
+      if (type === "gemini") state.sampleSpeaking = true;
+      for (const w of text.split(/(?<= )/)) {
+        if (run !== sampleRun) return;
+        div = appendDelta(div, type, w);
+        await wait(type === "gemini" ? 90 : 120);
+      }
+      await wait(400);
+      state.sampleSpeaking = false;
+    }
+    async function runSample() {
+      const run = ++sampleRun;
+      await wait(700);
+      setStartBusy(false);
+      enterChat();
+      startMic();
+      if (state.resuming) return;
+      showThinking();
+      await wait(1600); hideThinking();
+      await stream("gemini", "Hello. I will ask you some questions about your health, so the nurse and doctor have the details before they see you. Is it okay to go ahead?", run);
+      await wait(900);
+      await stream("user", "Yes, okay.", run);
+      showThinking(); await wait(2200); hideThinking();
+      await stream("gemini", "Thank you. What brings you to the hospital today?", run);
+      await wait(900);
+      await stream("user", "I fell at home yesterday. My left hip is very painful.", run);
+      showThinking(); await wait(2600); hideThinking();
+      await stream("gemini", "I am sorry to hear that. When did the hip pain start, before or after the fall?", run);
+    }
+    async function sampleReply() {
+      const run = sampleRun;
+      await wait(2000);
+      if (run !== sampleRun) return;
+      hideThinking();
+      await stream("gemini", "Thank you, I have noted that. This is a sample, so the questions stop here.", run);
+    }
+
+    /* ---------- keep the app inside the visible area when the phone keyboard opens ---------- */
+    const vv = window.visualViewport;
+    function fitViewport() {
+      if (!vv) return;
+      const r = document.documentElement.style;
+      r.setProperty("--app-h", vv.height + "px");
+      r.setProperty("--app-top", vv.offsetTop + "px");
+      if (state.screen === "chat") toBottom(true);
+    }
+    if (vv) { vv.addEventListener("resize", fitViewport); vv.addEventListener("scroll", fitViewport); fitViewport(); }
+
+    /* ---------- interface language switch ---------- */
+    // Changes only the interface. The assistant follows the language the patient speaks.
+    function applyLang(next) {
+      const all = (sel) => document.querySelectorAll(sel);
+      // capture the English source text once, before the first switch overwrites it
+      all("[data-i18n]").forEach((el) => (STR.en[el.dataset.i18n] ??= el.textContent));
+      all("[data-i18n-html]").forEach((el) => (STR.en[el.dataset.i18nHtml] ??= el.innerHTML));
+      all("[data-i18n-ph]").forEach((el) => (STR.en[el.dataset.i18nPh] ??= el.placeholder));
+      all("[data-i18n-aria]").forEach((el) => (STR.en[el.dataset.i18nAria] ??= el.getAttribute("aria-label")));
+      lang = STR[next] ? next : "en";
+      localStorage.setItem("lang", lang);
+      document.documentElement.lang = HTML_LANG[lang];
+      all("[data-i18n]").forEach((el) => (el.textContent = t(el.dataset.i18n)));
+      all("[data-i18n-html]").forEach((el) => (el.innerHTML = t(el.dataset.i18nHtml)));
+      all("[data-i18n-ph]").forEach((el) => (el.placeholder = t(el.dataset.i18nPh)));
+      all("[data-i18n-aria]").forEach((el) => el.setAttribute("aria-label", t(el.dataset.i18nAria)));
+      all("[data-lang]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
+      all("[data-lang-select]").forEach((s) => (s.value = lang));
+      // text the script set earlier
+      if (!$("#start-btn").disabled) $("#start-btn").textContent = t("start");
+      msgs.querySelectorAll(".msg[data-who]").forEach((m) => (m.dataset.who = t(m.classList.contains("user") ? "who_you" : "who_bot")));
+      const think = msgs.querySelector(".thinking span:last-child");
+      if (think) think.textContent = t("thinking");
+      if (state.screen === "chat") { $("#conn-text").textContent = t(LIVE ? "connected" : "sample"); renderState(); renderVideo(); }
+      if (state.screen === "ended") renderEnded();
+    }
+    document.querySelectorAll("[data-lang]").forEach((b) => b.addEventListener("click", () => applyLang(b.dataset.lang)));
+    document.querySelectorAll("[data-lang-select]").forEach((s) => s.addEventListener("change", () => applyLang(s.value)));
+    applyLang(lang);
+  </script>
+</body>
+</html>
