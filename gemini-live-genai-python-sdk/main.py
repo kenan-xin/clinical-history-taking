@@ -54,6 +54,15 @@ app.add_middleware(
 GENIE_CHATBOT_URL = os.getenv("GENIE_CHATBOT_URL")
 INTAKE_AGENT_UUID = os.getenv("INTAKE_AGENT_UUID")
 
+# Interface languages the frontend can select; the patient's choice is passed
+# to the Gemini session so the assistant replies in that language by default.
+PATIENT_LANGUAGES = {
+    "en": "English",
+    "zh": "Simplified Chinese (Mandarin)",
+    "ms": "Bahasa Melayu",
+    "ta": "Tamil",
+}
+
 # ─── Intake Agent Tool ────────────────────────────────────────────────────────
 send_message_to_intake_agent_declaration = types.Tool(
     function_declarations=[
@@ -224,14 +233,21 @@ async def send_message_to_intake_agent_mock(message: str, session_id: str) -> di
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, voice_name: str = VOICE_NAME, resume: bool = False):
+async def websocket_endpoint(
+    websocket: WebSocket,
+    voice_name: str = VOICE_NAME,
+    resume: bool = False,
+    lang: str = "",
+):
     """WebSocket endpoint for Gemini Live."""
     await websocket.accept()
+
+    patient_language = PATIENT_LANGUAGES.get(lang)
 
     session_resumption_handle = session_resume_data["handle"] if resume else None
     logger.info(
         f"WebSocket connection accepted with voice_name={voice_name}, resume={resume}, "
-        f"has_resume_handle={bool(session_resumption_handle)}"
+        f"lang={patient_language!r}, has_resume_handle={bool(session_resumption_handle)}"
     )
 
     audio_input_queue = asyncio.Queue()
@@ -263,6 +279,7 @@ async def websocket_endpoint(websocket: WebSocket, voice_name: str = VOICE_NAME,
         on_session_resumption_update=session_resumption_update_callback,
         tools=[send_message_to_intake_agent_declaration],
         tool_mapping={"send_message_to_intake_agent": make_intake_agent_handler(intake_session)},
+        language=patient_language,
     )
 
     async def receive_from_client():

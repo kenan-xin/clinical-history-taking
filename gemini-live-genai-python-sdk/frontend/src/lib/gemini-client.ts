@@ -24,7 +24,7 @@ export class GeminiClient {
     this.onError = config.onError;
   }
 
-  connect(voiceName: string, resume = false) {
+  connect(voiceName: string, resume = false, lang?: string) {
     // A second connect() while a socket exists would leak it and its handlers;
     // detach the old one first.
     if (this.websocket) {
@@ -40,6 +40,7 @@ export class GeminiClient {
     const params = new URLSearchParams();
     params.set("voice_name", voiceName);
     if (resume) params.set("resume", "true");
+    if (lang) params.set("lang", lang);
     const wsUrl = `${protocol}//${window.location.host}/ws?${params}`;
 
     this.websocket = new WebSocket(wsUrl);

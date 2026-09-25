@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { GeminiClient } from "@/lib/gemini-client";
 import { MediaHandler, type VideoKind } from "@/lib/media-handler";
 import { isServerEvent } from "@/lib/protocol";
+import { i18n } from "@/i18n";
+
+const i18nLanguage = () => i18n.language.split("-")[0];
 
 export type Screen = "start" | "chat" | "ended";
 export type MicState = "off" | "on" | "blocked";
@@ -358,7 +361,8 @@ export function useClinicalSession({ visitIdFromUrl, voiceFromUrl, t }: Options)
       }
       try {
         await getMedia().initializeAudio(); // must run inside the tap
-        getClient().connect(voice, resume);
+        // the selected interface language is also the assistant's default reply language
+        getClient().connect(voice, resume, i18nLanguage());
       } catch (e) {
         console.error(e);
         busyRef.current = false;

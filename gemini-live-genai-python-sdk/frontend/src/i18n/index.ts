@@ -52,3 +52,6 @@ export function changeLang(code: string) {
   window.localStorage.setItem("lang", code);
   applyDocumentLang(code as LangCode);
 }
+
+export { i18n };
+export default i18n;

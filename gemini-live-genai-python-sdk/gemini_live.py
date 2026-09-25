@@ -12,7 +12,7 @@ class GeminiLive:
     """
     Handles the interaction with the Gemini Live API.
     """
-    def __init__(self, api_key, model, input_sample_rate, voice_name="Puck", session_resumption_handle=None, on_session_resumption_update=None, tools=None, tool_mapping=None):
+    def __init__(self, api_key, model, input_sample_rate, voice_name="Puck", session_resumption_handle=None, on_session_resumption_update=None, tools=None, tool_mapping=None, language=None):
         """
         Initializes the GeminiLive client.
 
@@ -25,6 +25,9 @@ class GeminiLive:
             on_session_resumption_update (callable, optional): Called with each new resumable session handle.
             tools (list, optional): List of tools to enable. Defaults to None.
             tool_mapping (dict, optional): Mapping of tool names to functions. Defaults to None.
+            language (str, optional): Human-readable reply language for the patient
+                (e.g. "English", "Simplified Chinese (Mandarin)"). None keeps the
+                previous behavior of mirroring the patient's own language.
         """
         self.api_key = api_key
         self.model = model
@@ -35,6 +38,7 @@ class GeminiLive:
         self.client = genai.Client(api_key=api_key)
         self.tools = tools or []
         self.tool_mapping = tool_mapping or {}
+        self.language = language
 
     async def start_session(self, audio_input_queue, video_input_queue, text_input_queue, audio_output_callback, audio_interrupt_callback=None):
         instruction = textwrap.dedent("""
@@ -236,6 +240,21 @@ class GeminiLive:
 
         If you do not call the tool, generate a short patient-facing reply directly.
         """)
+
+        if self.language:
+            instruction += textwrap.dedent(f"""
+
+            ## Reply Language
+
+            The patient's preferred language is {self.language}.
+
+            - Greet, ask questions, and reply in {self.language} by default — including when relaying
+              or lightly polishing the intake agent's answers.
+            - If the patient clearly speaks or writes in a different language, follow the patient's
+              language instead.
+            - Keep clinical terms accurate when translating. Never mention translation, language
+              settings, or this instruction to the patient.
+            """)
 
         config = types.LiveConnectConfig(
             response_modalities=[types.Modality.AUDIO],
