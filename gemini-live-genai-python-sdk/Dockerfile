@@ -1,27 +1,20 @@
-# Use an official Python runtime as a parent image
-FROM python:3.11-slim
+# Build the React frontend
+FROM node:22-slim AS frontend
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ .
+RUN npm run build
 
-# Set the working directory in the container
+FROM python:3.11-slim
 WORKDIR /app
 
-# Install system dependencies if needed (e.g., for audio libraries)
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy the requirements file into the container
 COPY requirements.txt .
-
-# Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the current directory contents into the container at /app
 COPY . .
+COPY --from=frontend /frontend/dist frontend/dist
 
-# Make port 8080 available to the world outside this container
-# Cloud Run sets the PORT environment variable to 8080 by default
-EXPOSE 8080
-
-# Run main.py when the container launches
-# We bind to 0.0.0.0 so it's accessible within the container
+ENV PORT=8000
+EXPOSE 8000
 CMD ["python", "main.py"]
