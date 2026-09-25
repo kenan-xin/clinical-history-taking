@@ -81,6 +81,8 @@ export const en = {
   lost_d: "Your answers so far are kept. Check your internet connection, then continue where you stopped.",
   ended_d:
     "If you stopped before the assistant finished, you can continue where you left off.",
+  queue_label: "Queue number",
+  queue_wait: "Please wait for your queue number to be called.",
 };
 
 export const zh = {
@@ -154,6 +156,8 @@ export const zh = {
   ended_t: "对话已结束",
   lost_d: "您到目前为止的回答已保存。请检查网络连接，然后从上次停下的地方继续。",
   ended_d: "如果您在助手完成之前就停止了，可以从上次停下的地方继续。",
+  queue_label: "排队号码",
+  queue_wait: "请等候工作人员叫您的排队号码。",
 };
 
 export const ms = {
@@ -232,6 +236,8 @@ export const ms = {
     "Jawapan anda setakat ini disimpan. Periksa sambungan internet anda, kemudian sambung dari tempat anda berhenti.",
   ended_d:
     "Jika anda berhenti sebelum pembantu selesai, anda boleh sambung dari tempat anda berhenti.",
+  queue_label: "Nombor giliran",
+  queue_wait: "Sila tunggu nombor giliran anda dipanggil.",
 };
 
 export const ta = {
@@ -311,4 +317,6 @@ export const ta = {
     "இதுவரை உங்கள் பதில்கள் சேமிக்கப்பட்டுள்ளன. இணைய இணைப்பைச் சரிபார்த்து, நிறுத்திய இடத்திலிருந்து தொடரவும்.",
   ended_d:
     "உதவியாளர் முடிப்பதற்கு முன் நிறுத்தியிருந்தால், நிறுத்திய இடத்திலிருந்து தொடரலாம்.",
+  queue_label: "வரிசை எண்",
+  queue_wait: "உங்கள் வரிசை எண் அழைக்கப்படும் வரை காத்திருங்கள்.",
 };

@@ -26,6 +26,19 @@ export function isValidVisitId(v: string) {
   return VISIT_RE.test(v);
 }
 
+/**
+ * Placeholder queue number until the hospital system supplies real ones:
+ * a stable 4-digit number derived from the visit ID (same visit → same number).
+ */
+function queueNumberFromVisit(visitId: string): string {
+  let h = 2166136261; // FNV-1a
+  for (let i = 0; i < visitId.length; i++) {
+    h ^= visitId.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return String(1000 + (h % 9000));
+}
+
 let nextId = 1;
 
 interface Options {
@@ -53,6 +66,8 @@ export function useClinicalSession({ visitIdFromUrl, voiceFromUrl, t }: Options)
   const [startError, setStartError] = useState("");
   const [endedError, setEndedError] = useState("");
   const [endedLost, setEndedLost] = useState(false);
+  const [intakeComplete, setIntakeComplete] = useState(false);
+  const [queueNumber, setQueueNumber] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const busyRef = useRef(false);
@@ -74,6 +89,9 @@ export function useClinicalSession({ visitIdFromUrl, voiceFromUrl, t }: Options)
     opened: false,
     visitId,
     restart,
+    intakeComplete: false,
+    autoEnded: false,
+    autoEndTimer: null as ReturnType<typeof setTimeout> | null,
     userBubble: null as number | null,
     geminiBubble: null as number | null,
     thinkTimer: null as ReturnType<typeof setTimeout> | null,
@@ -114,6 +132,7 @@ export function useClinicalSession({ visitIdFromUrl, voiceFromUrl, t }: Options)
           ref.current.userBubble = null;
           ref.current.geminiBubble = null;
           hideThinking();
+          maybeAutoEnd();
         } else if (event.type === "user") {
           appendDelta("user", event.text);
           // Patient paused and no reply yet: the intake agent is working (it can
@@ -129,6 +148,17 @@ export function useClinicalSession({ visitIdFromUrl, voiceFromUrl, t }: Options)
           hideThinking();
           addNote(tRef.current("err_server"));
         } else if (event.type === "tool_call") {
+          const result = event.result;
+          const complete =
+            !!result &&
+            typeof result === "object" &&
+            (result as { intake_complete?: unknown }).intake_complete === true;
+          if (complete) {
+            ref.current.intakeComplete = true;
+            setIntakeComplete(true);
+            const vid = ref.current.visitId || "";
+            if (vid) setQueueNumber(queueNumberFromVisit(vid));
+          }
           console.debug("tool_call", event.name, event.args, event.result);
         }
       },
@@ -287,7 +317,13 @@ export function useClinicalSession({ visitIdFromUrl, voiceFromUrl, t }: Options)
       ref.current.opened = false;
       ref.current.userBubble = null;
       ref.current.geminiBubble = null;
-      if (!resume) setItems([]); // a fresh session never keeps the old transcript
+      if (!resume) {
+        setItems([]); // a fresh session never keeps the old transcript
+        setIntakeComplete(false);
+        setQueueNumber(null);
+        ref.current.intakeComplete = false;
+        ref.current.autoEnded = false;
+      }
       try {
         await getMedia().initializeAudio(); // must run inside the tap
         getClient().connect(voice, resume);
@@ -323,6 +359,8 @@ export function useClinicalSession({ visitIdFromUrl, voiceFromUrl, t }: Options)
 
   const endSession = useCallback(() => {
     ref.current.endedByUser = true;
+    ref.current.autoEnded = true;
+    if (ref.current.autoEndTimer) clearTimeout(ref.current.autoEndTimer);
     // disconnect() detaches the socket handlers, so onClose will NOT fire —
     // this epilogue runs the transition the close event would have triggered.
     clientRef.current?.disconnect();
@@ -334,12 +372,27 @@ export function useClinicalSession({ visitIdFromUrl, voiceFromUrl, t }: Options)
     setScreen("ended");
   }, [stopMedia, hideThinking]);
 
+  // The intake agent signalled the interview is finished: after the closing
+  // message finishes its turn, switch to the ended screen automatically.
+  const maybeAutoEnd = useCallback(() => {
+    if (!ref.current.intakeComplete || ref.current.autoEnded) return;
+    ref.current.autoEnded = true;
+    ref.current.autoEndTimer = setTimeout(() => {
+      ref.current.autoEndTimer = null;
+      endSession();
+    }, 1500);
+  }, [endSession]);
+
   const startNew = useCallback(() => {
     hideThinking();
     ref.current.userBubble = null;
     ref.current.geminiBubble = null;
     setItems([]);
     setEndedError("");
+    setIntakeComplete(false);
+    setQueueNumber(null);
+    ref.current.intakeComplete = false;
+    ref.current.autoEnded = false;
     setScreen("start");
   }, [hideThinking]);
 
@@ -356,6 +409,7 @@ export function useClinicalSession({ visitIdFromUrl, voiceFromUrl, t }: Options)
     return () => {
       // unmount cleanup
       if (ref.current.thinkTimer) clearTimeout(ref.current.thinkTimer);
+      if (ref.current.autoEndTimer) clearTimeout(ref.current.autoEndTimer);
       clientRef.current?.disconnect();
       mediaRef.current?.stopAudio();
       mediaRef.current?.stopAudioPlayback();
@@ -408,6 +462,8 @@ export function useClinicalSession({ visitIdFromUrl, voiceFromUrl, t }: Options)
     endedError,
     setEndedError,
     endedLost,
+    intakeComplete,
+    queueNumber,
     videoRef,
     showScreenShare,
     // actions

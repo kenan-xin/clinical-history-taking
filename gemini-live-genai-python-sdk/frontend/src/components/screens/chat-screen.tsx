@@ -464,7 +464,7 @@ function ControlButton({
       >
         {icon}
       </span>
-      <span>{label}</span>
+      <span className="whitespace-nowrap">{label}</span>
     </button>
   );
 }

@@ -78,6 +78,35 @@ send_message_to_intake_agent_declaration = types.Tool(
 )
 
 
+# Phrases that mark the interview as finished (the intake agent's compile-phase
+# closing message). Checked against the tool answer; when matched, the result
+# carries intake_complete=True so the frontend can end the session on its own.
+# NOTE: heuristic until the intake agent exposes an explicit completion flag —
+# its SSE events carry no phase/queue fields (verified 2026-09-25).
+INTAKE_COMPLETE_PHRASES = (
+    "review everything",
+    "compile a summary",
+    "compiling a summary",
+    "will be with you soon",
+    "will be with them soon",
+    "review it shortly",
+    "review and discuss",
+)
+
+
+def _looks_intake_complete(answer: str) -> bool:
+    if not answer:
+        return False
+    lowered = answer.lower()
+    if any(phrase in lowered for phrase in INTAKE_COMPLETE_PHRASES):
+        return True
+    # generic closing shape: doctor/nurse + review/see-you + shortly/soon
+    has_staff = "doctor" in lowered or "nurse" in lowered
+    has_action = "review" in lowered or "see you" in lowered
+    has_timing = "shortly" in lowered or "soon" in lowered
+    return has_staff and has_action and has_timing
+
+
 def make_intake_agent_handler(intake_session: dict):
     """
     Returns a closure that calls the intake agent, injecting the session_id automatically.
@@ -137,6 +166,7 @@ def make_intake_agent_handler(intake_session: dict):
 
                         if event.get("status") == "completed":
                             answer = event.get("answer")
+                            logger.info(f"Intake agent completed event (raw): {json.dumps(event, ensure_ascii=False)}")
                             logger.info(f"Intake agent completed. answer={answer!r}")
                             break
 
@@ -144,7 +174,7 @@ def make_intake_agent_handler(intake_session: dict):
                         logger.warning("Intake agent SSE stream ended without a completed event.")
                         return {"error": "No completed response from intake agent."}
 
-                    return {"answer": answer}
+                    return {"answer": answer, "intake_complete": _looks_intake_complete(answer)}
 
         except Exception as e:
             logger.error(f"Intake agent request failed: {e}")

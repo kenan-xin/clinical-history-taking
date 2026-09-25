@@ -7,7 +7,8 @@ type Session = ReturnType<typeof useClinicalSession>;
 
 export function EndedScreen({ session }: { session: Session }) {
   const { t } = useTranslation();
-  const { endedLost, endedError, busy, connect, startNew } = session;
+  const { endedLost, endedError, busy, connect, startNew, queueNumber } =
+    session;
 
   return (
     <section
@@ -39,6 +40,19 @@ export function EndedScreen({ session }: { session: Session }) {
           {endedLost ? t("lost_t") : t("ended_t")}
         </h2>
         <p className="mt-3 text-ink-2">{endedLost ? t("lost_d") : t("ended_d")}</p>
+
+        {/* queue card: shown once the interview ran to completion */}
+        {queueNumber && (
+          <div className="mt-6 rounded-m bg-primary-soft px-6 py-5 text-left">
+            <p className="text-fxs font-semibold text-primary-strong">
+              {t("queue_label")}
+            </p>
+            <p className="font-display text-[44px] leading-none font-bold text-primary-strong tabular-nums tracking-[0.1em]">
+              {queueNumber}
+            </p>
+            <p className="mt-2 text-fs text-primary-strong">{t("queue_wait")}</p>
+          </div>
+        )}
       </div>
 
       <footer className="flex flex-col gap-3 px-5 pt-3 pb-5 md:w-[min(100%-48px,480px)] md:justify-self-center md:bg-surface md:rounded-b-rl md:px-8 md:pt-4 md:pb-8">
