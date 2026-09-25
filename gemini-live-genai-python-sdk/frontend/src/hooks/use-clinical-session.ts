@@ -211,6 +211,7 @@ export function useClinicalSession({ visitIdFromUrl, voiceFromUrl, t }: Options)
           return;
         }
         setEndedLost(!ref.current.endedByUser);
+        ensureQueueNumber();
         setScreen("ended");
       },
       onError: (e) => console.error("WS error:", e), // onClose follows and shows the message
@@ -388,6 +389,17 @@ export function useClinicalSession({ visitIdFromUrl, voiceFromUrl, t }: Options)
     [addNote, showThinking],
   );
 
+  // The ended screen shows the queue card whenever this visit's interview has
+  // completed — even if this particular session was ended manually or the
+  // completion event arrived in an earlier session.
+  const ensureQueueNumber = useCallback(() => {
+    const vid = ref.current.visitId || "";
+    if (!vid) return;
+    setQueueNumber(
+      (prev) => prev ?? (hasCompletedBefore(vid) ? queueNumberFromVisit(vid) : null),
+    );
+  }, []);
+
   const endSession = useCallback(() => {
     ref.current.endedByUser = true;
     ref.current.autoEnded = true;
@@ -400,8 +412,9 @@ export function useClinicalSession({ visitIdFromUrl, voiceFromUrl, t }: Options)
     setBusy(false);
     hideThinking();
     setEndedLost(false);
+    ensureQueueNumber();
     setScreen("ended");
-  }, [stopMedia, hideThinking]);
+  }, [stopMedia, hideThinking, ensureQueueNumber]);
 
   // The intake agent signalled the interview is finished: after the closing
   // message finishes its turn, switch to the ended screen automatically.
